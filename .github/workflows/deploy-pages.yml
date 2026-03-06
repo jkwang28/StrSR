@@ -17,10 +17,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
-          publish_branch: gh-pages
-          force_orphan: true
+      - name: Deploy to gh-pages branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Create a temporary directory for the gh-pages content
+          TEMP_DIR=$(mktemp -d)
+          cp -r docs/. "$TEMP_DIR/"
+
+          # Create or reset gh-pages branch
+          git fetch origin gh-pages:gh-pages 2>/dev/null || true
+          git checkout --orphan gh-pages-new
+          git rm -rf . || true
+
+          # Copy gh-pages content
+          cp -r "$TEMP_DIR"/. .
+
+          git add -A
+          git commit -m "Deploy gh-pages from docs/ [skip ci]"
+          git push origin HEAD:gh-pages --force
+
