@@ -5,9 +5,9 @@
   <meta charset="utf-8">
   <!-- Meta tags for social media banners, these should be filled in appropriatly as they are your "business card" -->
   <!-- Replace the content tag with appropriate information -->
-  <meta name="description" content="StrSR: Structured Super-Resolution">
+  <meta name="description" content="StrSR: Spectral and Trajectory Regularization for Diffusion Transformer Super-Resolution">
   <meta property="og:title" content="StrSR" />
-  <meta property="og:description" content="Structured Super-Resolution" />
+  <meta property="og:description" content="Spectral and Trajectory Regularization for Diffusion Transformer Super-Resolution" />
   <meta property="og:url" content="https://jkwang28.github.io/StrSR/" />
   <!-- Path to banner image, should be in the path listed below. Optimal dimenssions are 1200X630-->
   <meta property="og:image" content="static/images/osdface.ico" />
@@ -21,7 +21,7 @@
   <meta name="twitter:image" content="static/images/your_twitter_banner_image.png">
   <meta name="twitter:card" content="summary_large_image">
   <!-- Keywords for your paper to be indexed by-->
-  <meta name="keywords" content="super resolution, structured, deep learning, computer vision">
+  <meta name="keywords" content="super resolution, diffusion transformer, spectral regularization, trajectory regularization, deep learning, computer vision">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 
@@ -51,16 +51,31 @@
       <div class="container is-max-desktop">
         <div class="columns is-centered">
           <div class="column has-text-centered">
-            <h1 class="title is-1 publication-title">StrSR: Structured Super-Resolution</h1>
+            <h1 class="title is-1 publication-title">Spectral and Trajectory Regularization for Diffusion Transformer Super-Resolution</h1>
             <div class="is-size-5 publication-authors">
               <!-- Paper authors -->
               <span class="author-block">
-                <a href="https://github.com/jkwang28" target="_blank">Jingkai Wang</a>
-              </span>
+                <a href="https://jingkaiwang.com" target="_blank">Jingkai Wang</a>,</span>
+              <span class="author-block">
+                <a href="https://github.com/YOU-EEE" target="_blank">Yixin Tang</a>,</span>
+              <span class="author-block">
+                <a href="https://github.com/gobunu" target="_blank">Jue Gong</a>,</span>
+              <span class="author-block">
+                Jiatong Li,</span>
+              <span class="author-block">
+                Shu Li,</span>
+              <span class="author-block">
+                Libo Liu,</span>
+              <span class="author-block">
+                Jianliang Lan,</span>
+              <span class="author-block">
+                <a href="https://isabelleliu630.github.io/" target="_blank">Yutong Liu</a>,</span>
+              <span class="author-block">
+                <a href="http://yulunzhang.com/" target="_blank">Yulun Zhang</a></span>
             </div>
 
             <div class="is-size-5 publication-authors">
-              <span class="author-block">2025</span>
+              <span class="author-block">2026</span>
             </div>
 
             <div class="column has-text-centered">
@@ -130,7 +145,7 @@
           <h2 class="title is-3">Abstract</h2>
           <div class="content has-text-justified">
             <p>
-              [TBD]
+              Diffusion transformer (DiT) architectures show great potential for real-world image super-resolution (Real-ISR). However, their computationally expensive iterative sampling necessitates one-step distillation. Existing one-step distillation methods struggle with Real-ISR on DiT. They suffer from fundamental trajectory mismatch and generate severe grid-like periodic artifacts. To tackle these challenges, we propose StrSR, a novel one-step adversarial distillation framework featuring spectral and trajectory regularization. Specifically, we propose an asymmetric discriminative distillation architecture to bridge the trajectory gap. Additionally, we design a frequency distribution matching strategy to effectively suppress DiT-specific periodic artifacts caused by high-frequency spectral leakage. Experiments demonstrate that StrSR achieves state-of-the-art performance in Real-ISR, across both quantitative metrics and visual perception.
             </p>
           </div>
         </div>
@@ -138,6 +153,21 @@
     </div>
   </section>
   <!-- End paper abstract -->
+
+
+  <!-- overall image -->
+  <section class="section hero is-small">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered has-text-left">
+        <div class="column is-five-sixths">
+          <p class="has-text-centered">
+            <img src="images/overall.png" alt="Overview of StrSR">
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- End overall image -->
 
 
   <!-- Pipeline -->
@@ -168,8 +198,23 @@
             <details open>
               <summary class="title is-4">Quantitative Comparisons</summary>
               <div class="content">
+                <ul>
+                  <li class="title is-6">Results in Table 1 on synthetic dataset (DIV2K-Val) from the main paper.</li>
+                </ul>
                 <p class="has-text-centered">
-                  [TBD]
+                  <img src="images/quan-div2k.png" alt="Quantitative results on DIV2K-Val">
+                </p>
+                <ul>
+                  <li class="title is-6">Results in Table 2 on real-world dataset (RealSR) from the main paper.</li>
+                </ul>
+                <p class="has-text-centered">
+                  <img src="images/quan-realsr.png" alt="Quantitative results on RealSR">
+                </p>
+                <ul>
+                  <li class="title is-6">Results in Table 3 on real-world dataset (RealLQ250) from the main paper.</li>
+                </ul>
+                <p class="has-text-centered">
+                  <img src="images/quan-reallq250.png" alt="Quantitative results on RealLQ250">
                 </p>
               </div>
             </details>
@@ -177,8 +222,23 @@
             <details open>
               <summary class="title is-4">Visual Comparisons</summary>
               <div class="content">
+                <ul>
+                  <li class="title is-6">Results in Figure 7 on synthetic dataset (DIV2K-Val) from the main paper.</li>
+                </ul>
                 <p class="has-text-centered">
-                  [TBD]
+                  <img src="images/vis-div2k.png" alt="Visual results on DIV2K-Val">
+                </p>
+                <ul>
+                  <li class="title is-6">Results in Figure 8 on real-world dataset (RealSR) from the main paper.</li>
+                </ul>
+                <p class="has-text-centered">
+                  <img src="images/vis-realsr.png" alt="Visual results on RealSR">
+                </p>
+                <ul>
+                  <li class="title is-6">Results in Figure 9 on real-world dataset (RealLQ250) from the main paper.</li>
+                </ul>
+                <p class="has-text-centered">
+                  <img src="images/vis-reallq250.png" alt="Visual results on RealLQ250">
                 </p>
               </div>
             </details>
@@ -197,11 +257,11 @@
         <div class="column is-five-sixths">
           <h2 class="title">BibTeX</h2>
           <pre style="background-color: #ffffff; overflow-x: auto; white-space: pre-wrap;">
-<code>@article{wang2025strsr,
-    title={StrSR: Structured Super-Resolution},
-    author={Wang, Jingkai},
+<code>@article{wang2026strsr,
+    title={Spectral and Trajectory Regularization for Diffusion Transformer Super-Resolution},
+    author={Jingkai Wang and Yixin Tang and Jue Gong and Jiatong Li and Shu Li and Libo Liu and Jianliang Lan and Yutong Liu and Yulun Zhang},
     journal={arXiv preprint},
-    year={2025}
+    year={2026}
 }</code></pre>
         </div>
       </div>
