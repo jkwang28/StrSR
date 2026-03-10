@@ -3,7 +3,7 @@
 [Jingkai Wang](https://jingkaiwang.com), [Yixin Tang](https://github.com/YOU-EEE), [Jue Gong](https://github.com/gobunu), Jiatong Li, Shu Li, Libo Liu, Jianliang Lan, [Yutong Liu](https://isabelleliu630.github.io/), [Yulun Zhang](http://yulunzhang.com/), "Spectral and Trajectory Regularization for Diffusion Transformer Super-Resolution", arXiv, 2026
 
 [![page](https://img.shields.io/badge/Project-Page-blue?logo=github&logoSvg)](https://jkwang28.github.io/StrSR/)
-[![arXiv](https://img.shields.io/badge/Paper-arXiv-red?logo=arxiv&logoSvg)](https://arxiv.org/)
+[![arXiv](https://img.shields.io/badge/Paper-arXiv-red?logo=arxiv&logoSvg)](https://arxiv.org/abs/2603.06275)
 [![releases](https://img.shields.io/github/downloads/jkwang28/StrSR/total.svg)](https://github.com/jkwang28/StrSR/releases)
 [![visitors](https://visitor-badge.laobi.icu/badge?page_id=jkwang28.StrSR&right_color=violet)](https://github.com/jkwang28/StrSR)
 [![GitHub Stars](https://img.shields.io/github/stars/jkwang28/StrSR?style=social)](https://github.com/jkwang28/StrSR)
@@ -114,7 +114,7 @@ If you find the code helpful in your research or work, please cite the following
 @article{wang2026strsr,
     title={Spectral and Trajectory Regularization for Diffusion Transformer Super-Resolution},
     author={Jingkai Wang and Yixin Tang and Jue Gong and Jiatong Li and Shu Li and Libo Liu and Jianliang Lan and Yutong Liu and Yulun Zhang},
-    journal={arXiv preprint},
+    journal={arXiv preprint 2603.06275},
     year={2026}
 }
 ```
