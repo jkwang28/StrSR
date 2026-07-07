@@ -1,11 +1,15 @@
-# Website for StrSR: Structured Super-Resolution
+# StrSR Project Page
 
-Page: https://jkwang28.github.io/StrSR/
+Project page for **Spectral and Trajectory Regularization for Diffusion Transformer Super-Resolution**, accepted to ECCV 2026.
 
-Repo: https://github.com/jkwang28/StrSR
+- Website: https://jingkaiwang.com/StrSR/
+- arXiv: https://arxiv.org/abs/2603.06275
+- Code: https://github.com/jkwang28/StrSR
 
-## Acknowledgments
-This page was built using the [Academic Project Page Template](https://github.com/eliahuhorwitz/Academic-project-page-template) which was adopted from the [Nerfies](https://nerfies.github.io) project page.
+## Build Note
+
+This website was completed by Jingkai Wang using Codex with GPT-5.5.
 
 ## Website License
-<a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+
+This website is licensed under a [Creative Commons Attribution-ShareAlike 4.0 International License](http://creativecommons.org/licenses/by-sa/4.0/).
