@@ -24,6 +24,7 @@ jobs:
       - uses: narayann7/star-history-action@v1
         with:
           repos: ${{ github.repository }}
+          token: ${{ secrets.GH_PAT }}
           type: Date
           themes: light,dark
           output-dir: assets/star-history
