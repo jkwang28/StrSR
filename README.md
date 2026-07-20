@@ -216,4 +216,8 @@ StrSR is built on and includes/adapts code from [HYPIR](https://github.com/XPixe
 This code is built on [HYPIR](https://github.com/XPixelGroup/HYPIR). Thanks to [LSDIR](https://ofsoundof.github.io/lsdir-data/) and [Aesthetic-4K](https://github.com/zhang0jhon/diffusion-4k) for the dataset. 
 
 <!-- star-history:start -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/star-history/star-history-dark.svg">
+  <img alt="Star history" src="assets/star-history/star-history-light.svg">
+</picture>
 <!-- star-history:end -->
