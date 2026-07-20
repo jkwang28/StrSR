@@ -147,3 +147,5 @@ Thumbs.db
 /datasets/
 /exps/
 /.tmp*
+
+.vscode

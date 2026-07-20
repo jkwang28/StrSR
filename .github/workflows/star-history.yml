@@ -1,0 +1,28 @@
+name: Star History
+
+on:
+  schedule:
+    - cron: "0 0 * * *"  # 每天更新一次
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: star-history
+  cancel-in-progress: true
+
+jobs:
+  star-history:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: narayann7/star-history-action@v1
+        with:
+          repos: jkwang28/StrSR
+          type: Date
+          themes: light,dark
+          output-dir: assets/star-history
+          update-readme: false

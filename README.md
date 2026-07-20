@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/logo.png" alt="StrSR" width="900">
+  <img src="assets/images/logo.png" alt="StrSR" width="700">
 </p>
 
 # [ECCV 2026] Spectral and Trajectory Regularization for Diffusion Transformer Super-Resolution
@@ -24,7 +24,7 @@
 
 > **Abstract:** Diffusion transformer (DiT) architectures show great potential for real-world image super-resolution (Real-ISR). However, their computationally expensive iterative sampling necessitates one-step distillation. Existing one-step distillation methods struggle with Real-ISR on DiT. They suffer from fundamental trajectory mismatch and generate severe grid-like periodic artifacts. To tackle these challenges, we propose StrSR, a novel one-step adversarial distillation framework featuring spectral and trajectory regularization. Specifically, we propose an asymmetric discriminative distillation architecture to bridge the trajectory gap. Additionally, we design a frequency distribution matching strategy to effectively suppress DiT-specific periodic artifacts caused by high-frequency spectral leakage. Experiments demonstrate that StrSR achieves state-of-the-art performance in Real-ISR, across both quantitative metrics and visual perception.
 
-![](docs/images/overall.png)
+![](assets/images/overall.png)
 
 ---
 
@@ -160,17 +160,17 @@ We achieved state-of-the-art performance on synthetic and real-world datasets.
 <summary>&ensp;Quantitative Comparisons (click to expand) </summary>
 <li> Results in Table 1 on synthetic dataset (DIV2K-Val) from the main paper. 
 <p align="center">
-<img src="docs/images/quan-div2k.png" >
+<img src="assets/images/quan-div2k.png" >
 </p>
 </li>
 <li> Results in Table 2 on real-world dataset (RealSR) from the main paper. 
 <p align="center">
-<img src="docs/images/quan-realsr.png" >
+<img src="assets/images/quan-realsr.png" >
 </p>
 </li>
 <li> Results in Table 3 on real-world dataset (RealLQ250) from the main paper. 
 <p align="center">
-<img src="docs/images/quan-reallq250.png" >
+<img src="assets/images/quan-reallq250.png" >
 </p>
 </li>
 </details>
@@ -178,17 +178,17 @@ We achieved state-of-the-art performance on synthetic and real-world datasets.
 <summary>&ensp;Visual Comparisons (click to expand) </summary>
 <li> Results in Figure 7 on synthetic dataset (DIV2K-Val) from the main paper.
 <p align="center">
-<img src="docs/images/vis-div2k.png" >
+<img src="assets/images/vis-div2k.png" >
 </p>
 </li>
 <li> Results in Figure 8 on real-world dataset (RealSR) from the main paper.
 <p align="center">
-<img src="docs/images/vis-realsr.png" >
+<img src="assets/images/vis-realsr.png" >
 </p>
 </li>
 <li> Results in Figure 9 on real-world dataset (RealLQ250) from the main paper.
 <p align="center">
-<img src="docs/images/vis-reallq250.png" >
+<img src="assets/images/vis-reallq250.png" >
 </p>
 </li>
 </details>
@@ -214,10 +214,19 @@ StrSR is built on and includes/adapts code from [HYPIR](https://github.com/XPixe
 
 This code is built on [HYPIR](https://github.com/XPixelGroup/HYPIR). Thanks to [LSDIR](https://ofsoundof.github.io/lsdir-data/) and [Aesthetic-4K](https://github.com/zhang0jhon/diffusion-4k) for the dataset. 
 
-<a href="https://www.star-history.com/#jkwang28/StrSR&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=jkwang28/StrSR&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=jkwang28/StrSR&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=jkwang28/StrSR&type=date&legend=top-left" />
- </picture>
+<a href="https://github.com/jkwang28/StrSR/stargazers">
+  <picture>
+    <source
+      media="(prefers-color-scheme: dark)"
+      srcset="./assets/star-history/star-history-dark.svg"
+    />
+    <source
+      media="(prefers-color-scheme: light)"
+      srcset="./assets/star-history/star-history-light.svg"
+    />
+    <img
+      alt="Star History Chart"
+      src="./assets/star-history/star-history-light.svg"
+    />
+  </picture>
 </a>
