@@ -1,0 +1,143 @@
+output_dir: exps/zimage_s2
+
+data_config:
+  train:
+    batch_size: 1
+    dataloader_num_workers: 2
+    dataset:
+      target: HYPIR.dataset.realesrgan.RealESRGANDataset
+      params:
+        file_meta:
+          file_list: 
+            - path: datasets/Aesthetic-4K/train/metadata.jsonl
+              image_path_prefix: datasets/Aesthetic-4K/train
+          image_path_key: file_name
+          prompt_key: text
+        file_backend_cfg:
+          target: HYPIR.dataset.file_backend.HardDiskBackend
+        out_size: 1024
+        crop_type: center
+        use_hflip: false
+        use_rot: false
+
+        blur_kernel_size: 21
+        kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+        kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+        sinc_prob: 0.1
+        blur_sigma: [0.2, 3]
+        betag_range: [0.5, 4]
+        betap_range: [1, 2]
+
+        blur_kernel_size2: 21
+        kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+        kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+        sinc_prob2: 0.1
+        blur_sigma2: [0.2, 1.5]
+        betag_range2: [0.5, 4]
+        betap_range2: [1, 2]
+
+        final_sinc_prob: 0.8
+
+        p_empty_prompt: 0.0
+
+    batch_transform:
+      target: HYPIR.dataset.batch_transform.RealESRGANBatchTransform
+      params:
+        hq_key: hq
+        extra_keys: [txt]
+        use_sharpener: true
+        # Queue size of training pool, this should be multiples of batch_size (per GPU).
+        queue_size: 256
+        # the first degradation process
+        resize_prob: [0.2, 0.7, 0.1] # up, down, keep
+        resize_range: [0.15, 1.5]
+        gaussian_noise_prob: 0.5
+        noise_range: [1, 30]
+        poisson_scale_range: [0.05, 3]
+        gray_noise_prob: 0.4
+        jpeg_range: [30, 95]
+
+        # the second degradation process
+        stage2_scale: 4
+        second_blur_prob: 0.8
+        resize_prob2: [0.3, 0.4, 0.3] # up, down, keep
+        resize_range2: [0.3, 1.2]
+        gaussian_noise_prob2: 0.5
+        noise_range2: [1, 25]
+        poisson_scale_range2: [0.05, 2.5]
+        gray_noise_prob2: 0.4
+        jpeg_range2: [30, 95]
+
+        resize_back: true
+
+base_model_type: zimage_vlm
+base_model_path: pretrained/Z-Image-Turbo
+qwen_model_path: pretrained/Qwen3-VL-4B-Instruct
+clip_model_path: pretrained/CLIP-convnext_xxlarge-laion2B-s34B-b82K-augreg-soup/open_clip_pytorch_model.bin
+model_t: 800
+coeff_t: 800
+lora_rank: 256
+lora_modules: [to_q, to_k, to_v, to_out.0, feed_forward.w1, feed_forward.w2, feed_forward.w3]
+use_ema: false
+ema_decay: 0.999
+resume_ema: false
+
+lambda_gan: 0.1
+lambda_lpips: 3
+lambda_l2: 0
+lambda_l1: 1
+lambda_fdl: 0.002
+lambda_r1: 10
+r1_sigma: 0.005
+lr_G: 5e-6
+lr_D: 1e-6
+optimizer_type: adamw
+opt_kwargs:
+  betas: [0.9, 0.999]
+use_warmup: false
+lr_scheduler_type: constant
+lr_warmup_steps: 3000
+seed: 42 #649151
+max_train_steps: 60000
+gradient_accumulation_steps: 1
+gradient_checkpointing: true
+max_grad_norm: 1.0
+logging_dir: logs
+report_to: tensorboard
+checkpointing_steps: 1000
+load_minimal_checkpoint: false
+checkpoints_total_limit: 10
+resume_from_checkpoint: exps/zimage_s1/checkpoint-40000
+log_image_steps: 100
+log_grad_steps: 100
+log_grad_modules: [conv_out]
+
+use_D: true
+use_D_sd35: false
+use_D_zimage: false
+use_vae: true
+use_repa: false
+log_grads: false
+train_encoder: false
+train_decoder: false
+use_pixel_shuffle: false
+use_clip: false
+use_txt: false
+use_qwen: true
+use_r1: true
+use_refiner: false
+use_fdl: true
+vae_decode_mode: cuda
+vae_highres_min_hw: [768, 768]
+vae_highres_min_area: 1048576
+
+resolution: 1024
+enc_type: dinov2-vit-b
+repa_projector_dim: 2048
+repa_encoder_depth: 8
+proj_coef: 1
+
+repa:
+  prediction: v
+  path_type: linear
+  weighting: uniform

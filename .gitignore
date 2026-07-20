@@ -80,17 +80,7 @@ target/
 profile_default/
 ipython_config.py
 
-# pyenv
-# .python-version
-
-# pipenv
-#Pipfile.lock
-
-# poetry
-#poetry.lock
-
 # pdm
-#pdm.lock
 .pdm.toml
 .pdm-python
 .pdm-build/
@@ -149,3 +139,11 @@ Thumbs.db
 # Files that might appear on external disks
 .Spotlight-V100
 .Trashes
+
+# Project specific
+/results*
+/testdata
+/pretrained
+/datasets/
+/exps/
+/.tmp*
