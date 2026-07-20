@@ -2,8 +2,10 @@ name: Star History
 
 on:
   schedule:
-    - cron: "0 0 * * *"  # 每天更新一次
-  workflow_dispatch:
+    - cron: "0 0 * * *"  # 每天 UTC 00:00 更新
+  watch:
+    types: [started]      # 有人 Star 后立即尝试更新
+  workflow_dispatch:     # 支持手动运行
 
 permissions:
   contents: write
@@ -21,8 +23,8 @@ jobs:
 
       - uses: narayann7/star-history-action@v1
         with:
-          repos: jkwang28/StrSR
+          repos: ${{ github.repository }}
           type: Date
           themes: light,dark
           output-dir: assets/star-history
-          update-readme: false
+          update-readme: true

@@ -1,10 +1,11 @@
 <p align="center">
-  <img src="assets/images/logo.png" alt="StrSR" width="700">
+  <img src="assets/images/logo.png" alt="StrSR" width="300">
 </p>
 
 # [ECCV 2026] Spectral and Trajectory Regularization for Diffusion Transformer Super-Resolution
 
 &#8224;Equal Contribution, \*Corresponding Authors
+
 [Jingkai Wang&#8224;](https://jingkaiwang.com), [Yixin Tang&#8224;](https://github.com/YOU-EEE), [Jue Gong](https://github.com/gobunu), Jiatong Li, Shu Li, Libo Liu, Jianliang Lan, [Yutong Liu\*](https://isabelleliu630.github.io/), [Yulun Zhang\*](http://yulunzhang.com/), "Spectral and Trajectory Regularization for Diffusion Transformer Super-Resolution", ECCV, 2026
 
 [![page](https://img.shields.io/badge/Project-Page-blue?logo=github&logoSvg)](https://jkwang28.github.io/StrSR/)
@@ -214,19 +215,5 @@ StrSR is built on and includes/adapts code from [HYPIR](https://github.com/XPixe
 
 This code is built on [HYPIR](https://github.com/XPixelGroup/HYPIR). Thanks to [LSDIR](https://ofsoundof.github.io/lsdir-data/) and [Aesthetic-4K](https://github.com/zhang0jhon/diffusion-4k) for the dataset. 
 
-<a href="https://github.com/jkwang28/StrSR/stargazers">
-  <picture>
-    <source
-      media="(prefers-color-scheme: dark)"
-      srcset="./assets/star-history/star-history-dark.svg"
-    />
-    <source
-      media="(prefers-color-scheme: light)"
-      srcset="./assets/star-history/star-history-light.svg"
-    />
-    <img
-      alt="Star History Chart"
-      src="./assets/star-history/star-history-light.svg"
-    />
-  </picture>
-</a>
+<!-- star-history:start -->
+<!-- star-history:end -->

@@ -113,8 +113,6 @@ log_grad_steps: 100
 log_grad_modules: [conv_out]
 
 use_D: true
-use_D_sd35: false
-use_D_zimage: false
 use_vae: true
 use_repa: false
 log_grads: false

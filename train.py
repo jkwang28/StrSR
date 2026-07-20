@@ -5,20 +5,8 @@ from omegaconf import OmegaConf
 
 
 TRAINER_REGISTRY = {
-    "sd2": ("HYPIR.trainer.sd2", "SD2Trainer"),
-    "hy": ("HYPIR.trainer.hy", "HunyuanImage21Trainer"),
-    "sd35": ("HYPIR.trainer.sd35", "SD35Trainer"),
-    "sd35_repa": ("HYPIR.trainer.sd35_repa", "SD35REPATrainer"),
-    "zimage": ("HYPIR.trainer.zimage", "ZImageTrainer"),
-    "zimage_val": ("HYPIR.trainer.zimage_val", "ZImageTrainerVal"),
-    "zimage_irepa": ("HYPIR.trainer.zimage_irepa", "ZImageREPATrainer"),
-    "zimage_turbo": ("HYPIR.trainer.zimage_turbo", "ZImageTurboTrainer"),
     "zimage_vlm": ("HYPIR.trainer.zimage_vlm", "ZImageVLMTrainer"),
-    "zimage_denoise": ("HYPIR.trainer.zimage_denoise", "ZImageDenoiseTrainer"),
-    "zimage_ablation": ("HYPIR.trainer.zimage_ablation", "ZImageAblationTrainer"),
     "flux_vlm": ("HYPIR.trainer.flux_vlm", "FluxVLMTrainer"),
-    "objectclear": ("HYPIR.trainer.objectclear", "ObjectClearTrainer"),
-    "objectclear_new": ("HYPIR.trainer.objectclear_new", "ObjectClearNewTrainer"),
 }
 
 
