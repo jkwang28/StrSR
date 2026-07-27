@@ -21,6 +21,8 @@
 - **2026-06-17** Congratulations! StrSR has been accepted to ECCV 2026. See you in Malmö 🇸🇪🇸🇪🇸🇪
 - **2026-03-06:** This repo is released.
 
+⭐⭐⭐ If StrSR is helpful to your projects, please help star this repo. Thanks!
+
 ---
 
 > **Abstract:** Diffusion transformer (DiT) architectures show great potential for real-world image super-resolution (Real-ISR). However, their computationally expensive iterative sampling necessitates one-step distillation. Existing one-step distillation methods struggle with Real-ISR on DiT. They suffer from fundamental trajectory mismatch and generate severe grid-like periodic artifacts. To tackle these challenges, we propose StrSR, a novel one-step adversarial distillation framework featuring spectral and trajectory regularization. Specifically, we propose an asymmetric discriminative distillation architecture to bridge the trajectory gap. Additionally, we design a frequency distribution matching strategy to effectively suppress DiT-specific periodic artifacts caused by high-frequency spectral leakage. Experiments demonstrate that StrSR achieves state-of-the-art performance in Real-ISR, across both quantitative metrics and visual perception.
