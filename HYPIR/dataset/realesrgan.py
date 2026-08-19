@@ -1,4 +1,5 @@
 from typing import Dict, Optional
+import logging
 import math
 import random
 import time
@@ -13,6 +14,8 @@ from PIL import Image
 from HYPIR.dataset.utils import augment, random_crop_arr, center_crop_arr, load_file_meta
 from HYPIR.utils.degradation import circular_lowpass_kernel, random_mixed_kernels
 from HYPIR.utils.common import instantiate_from_config
+
+logger = logging.getLogger(__name__)
 
 
 class RealESRGANDataset(data.Dataset):
@@ -88,7 +91,7 @@ class RealESRGANDataset(data.Dataset):
                 return None
             try:
                 image_bytes = self.file_backend.get(image_path)
-            except:
+            except OSError:
                 return None
             max_retry -= 1
             if image_bytes is None:
@@ -96,7 +99,7 @@ class RealESRGANDataset(data.Dataset):
 
         try:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        except:
+        except (OSError, ValueError):
             return None
 
         if self.crop_type != "none":
@@ -109,7 +112,9 @@ class RealESRGANDataset(data.Dataset):
                     image = random_crop_arr(image, self.out_size, min_crop_frac=0.7)
         else:
             if not (image.height == self.out_size and image.width == self.out_size):
-                print(f"Warning: image size {image.width}x{image.height}, with no crop.")
+                logger.warning(
+                    "Using uncropped image with size %dx%d", image.width, image.height
+                )
             image = np.array(image)
         return image
 
@@ -124,12 +129,12 @@ class RealESRGANDataset(data.Dataset):
                 lq_path = image_file["lq_path"]
                 img_lq = self.load_gt_image(lq_path)
                 if img_lq is None:
-                    print(f"failed to load {lq_path}")
+                    logger.warning("Failed to load low-resolution image %s", lq_path)
             else:
                 img_lq = None
             img_gt = self.load_gt_image(gt_path)
             if img_gt is None:
-                print(f"failed to load {gt_path}, try another image")
+                logger.warning("Failed to load %s; trying another image", gt_path)
                 index = random.randint(0, len(self) - 1)
 
         img_hq = (img_gt[..., ::-1] / 255.0).astype(np.float32)

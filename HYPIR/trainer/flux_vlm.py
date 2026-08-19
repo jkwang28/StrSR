@@ -18,7 +18,7 @@ from HYPIR.utils.captioner import IMAGE_DESCRIPTION_PROMPT
 
 try:
     from diffusers.models import AutoencoderKLFlux2, Flux2Transformer2DModel
-except Exception:
+except ImportError:
     AutoencoderKLFlux2 = None
     Flux2Transformer2DModel = None
 
@@ -41,6 +41,10 @@ class FluxVLMTrainer(BaseTrainer):
                 "Flux.2 classes are unavailable. Please upgrade diffusers/transformers to versions that provide "
                 "Flux2Transformer2DModel and AutoencoderKLFlux2."
             )
+        if not getattr(self.config, "use_qwen", False) and not getattr(
+            self.config, "use_txt", False
+        ):
+            raise ValueError("Enable either use_qwen or use_txt for conditioning")
 
         logger.info(
             "Use VAE: %s, Use D: %s, Use EMA: %s",
@@ -340,9 +344,7 @@ class FluxVLMTrainer(BaseTrainer):
             text_embeds = self._get_qwen3_prompt_embeds(prompts, hidden_states_layers=layer_ids)
             text_ids = self._prepare_text_ids(text_embeds)
         else:
-            text_embeds = torch.load("debug_inputs/default_prompt_embeds.pt", map_location="cpu").to(self.device)
-            text_embeds = torch.zeros_like(text_embeds).to(self.device)
-            text_ids = self._prepare_text_ids(text_embeds)
+            raise RuntimeError("No conditioning mode is enabled")
 
         self.c_txt = {"text_embeds": text_embeds, "text_ids": text_ids}
         self.batch_inputs = BatchInput(gt=gt, lq=lq, z_lq=z_lq, z_gt=z_gt, timesteps=timesteps)

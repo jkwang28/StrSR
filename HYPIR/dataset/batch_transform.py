@@ -1,4 +1,5 @@
-from typing import Any, overload, Dict, List, Sequence
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Sequence
 import random
 import copy
 
@@ -11,10 +12,11 @@ from HYPIR.dataset.diffjpeg import DiffJPEG
 from HYPIR.utils.degradation import random_add_gaussian_noise_pt, random_add_poisson_noise_pt
 
 
-class BatchTransform:
+class BatchTransform(ABC):
 
-    @overload
-    def __call__(self, batch: Any) -> Any: ...
+    @abstractmethod
+    def __call__(self, batch: Any) -> Any:
+        raise NotImplementedError
 
 
 class IdentityBatchTransform(BatchTransform):
@@ -366,9 +368,7 @@ class RealESRGANBatchTransformHQLQ(BatchTransform):
             lq = None
 
         batch = {"GT": hq, "LQ": lq, **{k: batch[k] for k in self.extra_keys}}
-        print(f"{self.extra_keys=}")
 
         if self.queue_size > 0:
             batch = self._dequeue_and_enqueue(batch)
         return batch
-

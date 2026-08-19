@@ -1,24 +1,23 @@
 import logging
 import os
 import shutil
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import overload, List, Dict
+from typing import List, Dict
 import importlib
 import warnings
 from contextlib import nullcontext
 import json
-import time
 import torch
 import torch.nn.functional as F
-from torchvision.transforms import Normalize
 import pyiqa
 try:
-    from torch.serialization import get_unsafe_globals_in_checkpoint, add_safe_globals  # type: ignore
-except Exception:
-    def get_unsafe_globals_in_checkpoint(path):  # type: ignore
+    from torch.serialization import get_unsafe_globals_in_checkpoint, add_safe_globals
+except ImportError:
+    def get_unsafe_globals_in_checkpoint(_path):
         return []
 
-    def add_safe_globals(globals_list):  # type: ignore
+    def add_safe_globals(_globals_list):
         return None
 from torchvision.utils import make_grid
 from accelerate import Accelerator, DeepSpeedPlugin
@@ -68,7 +67,7 @@ class BatchInput:
             self.__dict__[name] = value
 
 
-class BaseTrainer:
+class BaseTrainer(ABC):
 
     def __init__(self, config):
         self.config = config
@@ -151,7 +150,12 @@ class BaseTrainer:
         return model
 
     def init_models(self):
-        print(f"Use VAE: {self.config.use_vae}, Use D: {self.config.use_D}, Use EMA: {self.config.use_ema}")
+        logger.info(
+            "Initializing models: VAE=%s, discriminator=%s, EMA=%s",
+            self.config.use_vae,
+            self.config.use_D,
+            self.config.use_ema,
+        )
         self.init_scheduler()
         self.init_text_models()
         if self.config.use_vae:
@@ -162,20 +166,20 @@ class BaseTrainer:
         self.init_lpips()
         self.init_dists()
 
-    @overload
+    @abstractmethod
     def init_scheduler(self):
-        ...
+        raise NotImplementedError
 
     def init_repa(self):
-        ...
+        raise NotImplementedError("REPA is not implemented by this trainer")
 
-    @overload
+    @abstractmethod
     def init_text_models(self):
-        ...
+        raise NotImplementedError
 
-    @overload
+    @abstractmethod
     def encode_prompt(self, prompt: List[str]) -> Dict[str, torch.Tensor]:
-        ...
+        raise NotImplementedError
 
     def init_vae(self):
         self.vae = AutoencoderKL.from_pretrained(
@@ -203,9 +207,9 @@ class BaseTrainer:
     def init_dists(self):
         self.metric_dists = pyiqa.create_metric('dists', device=self.device, as_loss=True)
 
-    @overload
+    @abstractmethod
     def init_generator(self):
-        ...
+        raise NotImplementedError
 
     def init_discriminator(self):
         ctx = (
@@ -260,7 +264,7 @@ class BaseTrainer:
         elif self.config.optimizer_type == "rmsprop":
             optimizer_cls = torch.optim.RMSprop
         else:
-            optimizer_cls = None
+            raise ValueError(f"Unsupported optimizer: {self.config.optimizer_type}")
 
         self.G_params = list(filter(lambda p: p.requires_grad, self.G.parameters()))
 
@@ -363,8 +367,9 @@ class BaseTrainer:
                 unsafe_globals = list(map(get_symbol, unsafe_globals))
                 add_safe_globals(unsafe_globals)
 
+    @abstractmethod
     def attach_accelerator_hooks(self):
-        ...
+        raise NotImplementedError
 
     def on_training_start(self):
         self._save_config()
@@ -426,7 +431,7 @@ class BaseTrainer:
         logger.info(f"Saved config to {yaml_path}")
 
     def prepare_batch_inputs(self, batch, transform=None):
-        if transform == None:
+        if transform is None:
             transform = self.batch_transform
         batch = transform(batch)
         gt = (batch["GT"] * 2 - 1).float()
@@ -444,9 +449,9 @@ class BaseTrainer:
             prompt=prompt,
         )
 
-    @overload
+    @abstractmethod
     def forward_generator(self) -> torch.Tensor:
-        ...
+        raise NotImplementedError
 
     def repa_loss(self, zs, zs_pred):
         latents_scale = torch.tensor(
@@ -561,16 +566,15 @@ class BaseTrainer:
         ds_plugin = getattr(self.accelerator.state, "deepspeed_plugin", None)
         use_null_ctx = bool(ds_plugin and getattr(ds_plugin, "zero_stage", 0) >= 2)
         ctx = nullcontext() if use_null_ctx else self.accelerator.accumulate(self.G)
+        grad_norm = torch.zeros((), device=self.device)
         with ctx:
             if hasattr(self, "D") and self.D is not None:
                 self.unwrap_model(self.D).eval().requires_grad_(False)
-            start_time = time.perf_counter()
             if self.config.use_repa:
                 _, latent, zs_pred = self.forward_generator()
                 zs = self.batch_inputs.z_s
             else:
                 latent = self.forward_generator()
-            end_time = time.perf_counter()
             loss_l2 = F.mse_loss(latent.float(), self.batch_inputs.z_gt.float(), reduction="mean") * self.config.lambda_l2
             loss_G = loss_l2.float()
             if self.config.use_repa:
@@ -590,14 +594,13 @@ class BaseTrainer:
         else:
             loss_dict['G_total'] = loss_l2
 
-        for k, v in loss_dict.items():
-            print(f"--------------loss key: {k}, loss value: {v}--------------")
         return loss_dict, grad_norm
 
     def optimize_generator_image(self):
         ds_plugin = getattr(self.accelerator.state, "deepspeed_plugin", None)
         use_null_ctx = bool(ds_plugin and getattr(ds_plugin, "zero_stage", 0) >= 2)
         ctx = nullcontext() if use_null_ctx else self.accelerator.accumulate(self.G)
+        norm_before_clip = torch.zeros((), device=self.device)
         with ctx:
             if getattr(self.config, "use_D", False) and hasattr(self, "D") and self.D is not None:
                 D_unwrapped = self.unwrap_model(self.D)
@@ -676,15 +679,16 @@ class BaseTrainer:
             if self.config.use_repa:
                 x = self.forward_generator()[0]
             else:
-                x, latents = self.forward_generator()
+                x, _ = self.forward_generator()
         self.G_pred = x
         ds_plugin = getattr(self.accelerator.state, "deepspeed_plugin", None)
         use_null_ctx = bool(ds_plugin and getattr(ds_plugin, "zero_stage", 0) >= 2)
         ctx = nullcontext() if use_null_ctx else self.accelerator.accumulate(self.D)
+        norm_before_clip = torch.zeros((), device=self.device)
         with ctx:
             self.unwrap_model(self.D).train().requires_grad_(True)
-            loss_D_real, real_logits = self.D(gt, for_real=True, return_logits=True)
-            loss_D_fake, fake_logits = self.D(x, for_real=False, return_logits=True)
+            _, real_logits = self.D(gt, for_real=True, return_logits=True)
+            _, fake_logits = self.D(x, for_real=False, return_logits=True)
 
 
             loss_D = 0.0
@@ -731,15 +735,10 @@ class BaseTrainer:
         self.attach_accelerator_hooks()
         self.on_training_start()
         self.batch_count = 0
-        val_interval = getattr(self.config, "validation_steps", 10000)
-
         while self.global_step < self.config.max_train_steps:
             train_loss = {}
             for batch in self.dataloader:
-                start_time = time.perf_counter()
                 self.prepare_batch_inputs(batch)
-                end_time = time.perf_counter()
-                prepare_time = end_time - start_time
                 try:
                     bs = len(self.batch_inputs.lq)
                 except AttributeError:
@@ -884,7 +883,7 @@ class BaseTrainer:
         for idx, (name, loss) in enumerate(losses):
             retain_graph = idx != len(losses) - 1
             try:
-                print(f"Current gradient's loss: {name}")
+                logger.debug("Computing gradients for loss %s", name)
                 loss.backward(retain_graph=retain_graph)
             except RuntimeError as e:
                 logger.error(f"[log_grads] backward failed for {name}: {e}")

@@ -1,5 +1,6 @@
 from typing import List, Dict
 from collections.abc import Sequence, Mapping
+import logging
 import random
 import math
 import os
@@ -11,6 +12,8 @@ import cv2
 import polars as pl
 import torch
 from torch.nn import functional as F
+
+logger = logging.getLogger(__name__)
 
 
 def load_file_meta(file_meta: Dict[str, str]) -> List[Dict[str, str]]:
@@ -52,7 +55,6 @@ def load_file_meta(file_meta: Dict[str, str]) -> List[Dict[str, str]]:
         if ext == ".parquet":
             df = pl.read_parquet(file_list_path)
             if max_count is None or mode == "first":
-                print("utils, line 55")
                 for row in df.iter_rows(named=True):
                     image_rel_path = row.get(image_path_key)
                     if image_rel_path is None:
@@ -61,7 +63,6 @@ def load_file_meta(file_meta: Dict[str, str]) -> List[Dict[str, str]]:
                     prompt = prompt if prompt is not None else ""
                     image_path = os.path.join(image_path_prefix, image_rel_path)
                     lq_path = image_path.replace('/HR/', '/LR_bicubic/')
-                    print(f"{image_path=}, {lq_path=}")
                     files.append(
                         {
                             "image_path": image_path,
@@ -73,7 +74,6 @@ def load_file_meta(file_meta: Dict[str, str]) -> List[Dict[str, str]]:
                     if max_count is not None and added >= max_count:
                         break
             else:
-                print("utils, line 76")
                 n_total = df.height
                 n_take = min(max_count, n_total)
                 if n_take > 0:
@@ -86,7 +86,6 @@ def load_file_meta(file_meta: Dict[str, str]) -> List[Dict[str, str]]:
                         prompt = prompt if prompt is not None else ""
                         image_path = os.path.join(image_path_prefix, image_rel_path)
                         lq_path = image_path.replace('/HR/', '/LR_bicubic/')
-                        print(f"{image_path=}, {lq_path=}")
                         files.append(
                             {
                                 "image_path": image_path,
@@ -197,7 +196,13 @@ def load_file_meta(file_meta: Dict[str, str]) -> List[Dict[str, str]]:
         else:
             raise ValueError(f"Unsupported file list type: {ext}")
 
-        print(f"Loaded {added} images from {file_list_path}, mode={mode}, limit={limit_val}")
+        logger.info(
+            "Loaded %d images from %s (mode=%s, limit=%s)",
+            added,
+            file_list_path,
+            mode,
+            limit_val,
+        )
 
     if isinstance(file_list_conf, Sequence) and not isinstance(file_list_conf, str):
         for entry in file_list_conf:

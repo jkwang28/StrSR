@@ -19,7 +19,7 @@ class BaseStorageBackend(metaclass=ABCMeta):
 
     @abstractmethod
     def get(self, filepath: str) -> bytes:
-        pass
+        raise NotImplementedError
 
 
 class HardDiskBackend(BaseStorageBackend):

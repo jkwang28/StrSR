@@ -66,13 +66,11 @@ The stage 2 configurations already set `resume_from_checkpoint` to `exps/flux_s1
 
 ```bash
 # Stage 1: steps 1-40000. train.sh is a shortcut for this command.
-TORCH_DISTRIBUTED_DEBUG=DETAIL \
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 accelerate launch --mixed_precision=bf16 train.py \
     --config configs/flux_train_stage1.yaml
 
 # Stage 2: resume from exps/flux_s1/checkpoint-40000 and continue to step 60000.
-TORCH_DISTRIBUTED_DEBUG=DETAIL \
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 accelerate launch --mixed_precision=bf16 train.py \
     --config configs/flux_train_stage2.yaml
@@ -82,13 +80,11 @@ accelerate launch --mixed_precision=bf16 train.py \
 
 ```bash
 # Stage 1: steps 1-40000.
-TORCH_DISTRIBUTED_DEBUG=DETAIL \
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 accelerate launch --mixed_precision=bf16 train.py \
     --config configs/zimage_train_stage1.yaml
 
 # Stage 2: resume from exps/zimage_s1/checkpoint-40000 and continue to step 60000.
-TORCH_DISTRIBUTED_DEBUG=DETAIL \
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 accelerate launch --mixed_precision=bf16 train.py \
     --config configs/zimage_train_stage2.yaml

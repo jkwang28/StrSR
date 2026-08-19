@@ -1,9 +1,13 @@
+import logging
+
 import torch
 from torch import nn
 from vision_aided_loss.cv_discriminator import BlurPool, spectral_norm
 from vision_aided_loss.cv_losses import multilevel_loss
 
 from HYPIR.model.backbone import ImageOpenCLIPConvNext
+
+logger = logging.getLogger(__name__)
 
 
 class MultiLevelDConv(nn.Module):
@@ -84,12 +88,12 @@ class ImageConvNextDiscriminator(nn.Module):
         features = self.model.encode_image(x, return_pooled_feats=True)
         if verbose:
             for i, f in enumerate(features):
-                print(f"{i}-th feature: {f.shape}")
+                logger.info("Feature %d shape: %s", i, tuple(f.shape))
 
         features = self.decoder(features)
         if verbose:
             for i, f in enumerate(features):
-                print(f"{i}-th feature after decoder: {f.shape}")
+                logger.info("Decoded feature %d shape: %s", i, tuple(f.shape))
 
         if not return_logits:
             return self.loss_fn(features, for_real=for_real, for_G=for_G)

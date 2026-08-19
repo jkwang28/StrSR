@@ -14,6 +14,8 @@ from tqdm import tqdm
 
 from torch.hub import download_url_to_file, get_dir
 
+logger = logging.getLogger(__name__)
+
 
 def get_obj_from_str(string: str, reload: bool=False) -> Any:
     module, cls = string.rsplit(".", 1)
@@ -100,7 +102,7 @@ def load_file_from_url(url, model_dir=None, progress=True, file_name=None):
         filename = file_name
     cached_file = os.path.abspath(os.path.join(model_dir, filename))
     if not os.path.exists(cached_file):
-        print(f'Downloading: "{url}" to {cached_file}\n')
+        logger.info('Downloading "%s" to %s', url, cached_file)
         download_url_to_file(url, cached_file, hash_prefix=None, progress=progress)
     return cached_file
 
@@ -225,7 +227,7 @@ def log_txt_as_img(wh, xc):
         try:
             draw.text((0, 0), lines, fill="black", font=font)
         except UnicodeEncodeError:
-            print("Cant encode string for logging. Skipping.")
+            logger.warning("Unable to encode text for image logging; skipping it")
 
         txt = np.array(txt).transpose(2, 0, 1) / 127.5 - 1.0
         txts.append(txt)

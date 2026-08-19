@@ -35,8 +35,7 @@ def import_model_class_from_model_name_or_path(
         from transformers import Qwen3ForCausalLM
 
         return Qwen3ForCausalLM
-    else:
-        raise "Invalid Text Encoder"
+    raise ValueError(f"Unsupported text encoder architecture: {model_class}")
 
 
 def load_text_encoder(class_text_encoder, args):
@@ -58,7 +57,7 @@ class ZImageVLMTrainer(BaseTrainer):
         super().init_dataset()
 
     def prepare_batch_inputs(self, batch, transform=None):
-        if transform == None:
+        if transform is None:
             transform = self.batch_transform
         batch = transform(batch)
         gt = (batch["GT"] * 2 - 1).float().to(self.device)
@@ -82,8 +81,7 @@ class ZImageVLMTrainer(BaseTrainer):
                     prompt_embeds, _ = self.encode_prompt(prompt=prompt)
                     self.c_txt["prompt_embeds"] = prompt_embeds,
                 else:
-                    pos_promt_emb = torch.load(f"debug_inputs/prompt_embeds.pt")
-                    self.c_txt["prompt_embeds"] = [pos_promt_emb.to(self.device)] * bs
+                    raise RuntimeError("No conditioning mode is enabled")
 
         self.batch_inputs = BatchInput(
             gt=gt, lq=lq,
@@ -92,7 +90,16 @@ class ZImageVLMTrainer(BaseTrainer):
         )
 
     def init_models(self):
-        print(f"Use VAE: {self.config.use_vae}, Use D: {self.config.use_D}, Use EMA: {self.config.use_ema}")
+        if not getattr(self.config, "use_qwen", False) and not getattr(
+            self.config, "use_txt", False
+        ):
+            raise ValueError("Enable either use_qwen or use_txt for conditioning")
+        logger.info(
+            "Initializing models: VAE=%s, discriminator=%s, EMA=%s",
+            self.config.use_vae,
+            self.config.use_D,
+            self.config.use_ema,
+        )
         self.init_scheduler()
         if getattr(self.config, "use_vae", True):
             self.init_vae()
