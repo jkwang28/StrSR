@@ -33,10 +33,9 @@ from PIL import Image
 from omegaconf import OmegaConf
 
 from HYPIR.model.D import ImageConvNextDiscriminator
-from HYPIR.utils.common import instantiate_from_config, log_txt_as_img, print_vram_state, SuppressLogging
+from HYPIR.utils.common import instantiate_from_config, print_vram_state, SuppressLogging
 from HYPIR.utils.ema import EMAModel
-from HYPIR.utils.tabulate import tabulate
-from HYPIR.utils.others import NoOpContext, EdgeDetectionModel, total_variation_loss
+from HYPIR.utils.others import EdgeDetectionModel, total_variation_loss
 from HYPIR.trainer.checkpoint_utils import (
     load_qwen_projectors,
     load_trainable_state_dict,
@@ -219,18 +218,19 @@ class BaseTrainer:
             self.D.train().requires_grad_(True)
 
     def summary_models(self):
-        table_data = []
+        summaries = []
         for attr, value in self.__dict__.items():
             if not isinstance(value, torch.nn.Module):
                 continue
-            model = value
-            model_type = type(model).__name__
-            total_params = sum(p.numel() for p in model.parameters()) / 1_000_000
-            learnable_params = sum(p.numel() for p in model.parameters() if p.requires_grad) / 1_000_000
-            table_data.append([attr, model_type, f"{total_params:.2f}", f"{learnable_params:.2f}"])
-        headers = ["Model Name", "Model Type", "Total Parameters (M)", "Learnable Parameters (M)"]
-        table = tabulate(table_data, headers=headers, tablefmt="pretty")
-        logger.info(f"Model Summary:\n{table}")
+            total_params = sum(p.numel() for p in value.parameters()) / 1_000_000
+            trainable_params = sum(
+                p.numel() for p in value.parameters() if p.requires_grad
+            ) / 1_000_000
+            summaries.append(
+                f"{attr} ({type(value).__name__}): "
+                f"{total_params:.2f}M total, {trainable_params:.2f}M trainable"
+            )
+        logger.info("Model summary:\n%s", "\n".join(summaries))
 
     def init_lr_schedulers(self):
         from diffusers.optimization import get_scheduler
@@ -341,8 +341,6 @@ class BaseTrainer:
             attrs = ["G", "G_opt", "G_scheduler", "dataloader"]
             if getattr(self.config, "use_D", False) and hasattr(self, "D") and hasattr(self, "D_opt"):
                 attrs.extend(["D", "D_opt", "D_scheduler"])
-            if getattr(self.config, "use_refiner", False) and hasattr(self, "refiner") and hasattr(self, "refiner_opt"):
-                attrs.extend(["refiner", "refiner_opt"])
             if getattr(self.config, "use_qwen", False) and hasattr(self, "projector"):
                 attrs.extend(["projector"])
             prepared_objs = self.accelerator.prepare(*[getattr(self, attr) for attr in attrs])
@@ -669,9 +667,6 @@ class BaseTrainer:
             self.G_scheduler.step()
             self.G_opt.zero_grad()
 
-            if hasattr(self, "refiner"):
-                self.refiner_opt.step()
-                self.refiner_opt.zero_grad()
         loss_dict = dict(G_total=loss_G, G_mse=loss_l2, G_l1=loss_l1, G_lpips=loss_lpips , G_dists=loss_dists, G_disc=loss_disc, G_fdl=loss_fdl)
         return loss_dict, norm_before_clip
 
@@ -725,9 +720,6 @@ class BaseTrainer:
             self.D_scheduler.step()
             self.D_opt.zero_grad()
 
-        if hasattr(self, "refiner"):
-            self.refiner_opt.step()
-            self.refiner_opt.zero_grad()
         loss_dict = dict(D=loss_D, D_r1=approx_r1)
         with torch.no_grad():
             real_logits = torch.tensor([logit_map.mean() for logit_map in real_logits], device=self.device).mean()
@@ -960,11 +952,6 @@ class BaseTrainer:
                 
                 torch.save(vae_decoder_state_dict, os.path.join(save_path, "vae_decoder.pth"))
                 logger.info(f"Saved fine-tuned VAE decoder weights to {save_path}/vae_decoder.pth")
-            if self.config.use_refiner and hasattr(self, "refiner"):
-                refiner_state_dict = self.unwrap_model(self.refiner).state_dict()
-
-                torch.save(refiner_state_dict, os.path.join(save_path, "refiner.pth"))
-                logger.info(f"Saved refiner weights to {save_path}/refiner.pth")
             self.ema_handler.save_ema_weights(save_path)
             logger.info(f"Saved ema weights to {save_path}")
 

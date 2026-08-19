@@ -8,7 +8,7 @@ data_config:
       target: HYPIR.dataset.realesrgan.RealESRGANDataset
       params:
         file_meta:
-          file_list: 
+          file_list:
             - path: datasets/Aesthetic-4K/train/metadata.jsonl
               image_path_prefix: datasets/Aesthetic-4K/train
           image_path_key: file_name
@@ -115,24 +115,7 @@ use_repa: false
 log_grads: false
 train_encoder: false
 train_decoder: false
-use_pixel_shuffle: false
-use_clip: false
 use_txt: false
 use_qwen: true
 use_r1: true
-use_refiner: false
 use_fdl: false
-vae_decode_mode: cuda
-vae_highres_min_hw: [768, 768]
-vae_highres_min_area: 1048576
-
-resolution: 1024
-enc_type: dinov2-vit-b
-repa_projector_dim: 2048
-repa_encoder_depth: 8
-proj_coef: 1
-
-repa:
-  prediction: v
-  path_type: linear
-  weighting: uniform

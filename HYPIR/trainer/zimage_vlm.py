@@ -1,39 +1,24 @@
 import logging
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import List, Optional, Union
 import os
 import torch
-import random
-from tqdm.auto import tqdm
 from accelerate.logging import get_logger
 from contextlib import nullcontext
 from peft import LoraConfig, get_peft_model
-from HYPIR.utils.ema import EMAModel
-try:
-    from peft import mark_only_lora_as_trainable
-except ImportError:
-    def mark_only_lora_as_trainable(model):
-        for name, param in model.named_parameters():
-            param.requires_grad = "lora_" in name
 from HYPIR.utils.common import (
-    instantiate_from_config,
-    log_txt_as_img,
     print_vram_state,
     SuppressLogging,
     module_param_memory,
     human_bytes,
 )
-import torch.nn.functional as F
 from diffusers import (
     AutoencoderKL,
     FlowMatchEulerDiscreteScheduler,
 )
-from HYPIR.utils.common import instantiate_from_config, log_txt_as_img, print_vram_state, SuppressLogging
-from HYPIR.model.backbone import CNNRefiner
 from HYPIR.model.D import ImageConvNextDiscriminator
 from diffusers.models.transformers import ZImageTransformer2DModel
-from transformers import AutoTokenizer, PreTrainedModel, PretrainedConfig
+from transformers import AutoTokenizer, PretrainedConfig
 from HYPIR.trainer.base import BaseTrainer, BatchInput
-from HYPIR.utils.others import NoOpContext, EdgeDetectionModel, total_variation_loss
 from HYPIR.utils.captioner import IMAGE_DESCRIPTION_PROMPT
 from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 from qwen_vl_utils import process_vision_info
@@ -112,8 +97,6 @@ class ZImageVLMTrainer(BaseTrainer):
         if getattr(self.config, "use_vae", True):
             self.init_vae()
         self.init_generator()
-        if getattr(self.config, "use_refiner", False):
-            self.init_refiner()
         if getattr(self.config, "use_D", True):
             self.init_discriminator()
         if getattr(self.config, "use_vae", True):
@@ -547,6 +530,4 @@ class ZImageVLMTrainer(BaseTrainer):
         latents = latents.to(dtype=self.weight_dtype).contiguous()
         image = self.vae.decode(latents, return_dict=False)[0]
 
-        if getattr(self.config, "use_refiner", False):
-            image = self.refiner(image)
         return image
