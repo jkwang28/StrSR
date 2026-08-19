@@ -12,16 +12,13 @@ import torch
 import torch.nn.functional as F
 from torchvision.transforms import Normalize
 import pyiqa
-# Torch 2.6 introduces safe serialization helpers; provide backward-compatible fallbacks for 2.5.x
 try:
     from torch.serialization import get_unsafe_globals_in_checkpoint, add_safe_globals  # type: ignore
-except Exception:  # torch < 2.6.0
+except Exception:
     def get_unsafe_globals_in_checkpoint(path):  # type: ignore
-        # In torch<=2.5, there is no safe-unpickling gate, so nothing to add.
         return []
 
     def add_safe_globals(globals_list):  # type: ignore
-        # No-op on older torch versions.
         return None
 from torchvision.utils import make_grid
 from accelerate import Accelerator, DeepSpeedPlugin
@@ -35,7 +32,6 @@ from diffusers import AutoencoderKL
 from PIL import Image
 from omegaconf import OmegaConf
 
-# from REPA.loss import SILoss
 from HYPIR.model.D import ImageConvNextDiscriminator
 from HYPIR.utils.common import instantiate_from_config, log_txt_as_img, print_vram_state, SuppressLogging
 from HYPIR.utils.ema import EMAModel
@@ -189,7 +185,6 @@ class BaseTrainer:
 
     def init_lpips(self):
         with warnings.catch_warnings():
-            # Suppress warnings from lpips
             warnings.simplefilter("ignore")
             self.net_lpips = lpips.LPIPS(net="vgg", verbose=False).to(self.device)
         self.net_lpips.eval().requires_grad_(False)
@@ -201,8 +196,6 @@ class BaseTrainer:
     def init_fdl(self):
         self.fdl_loss = None
         if getattr(self.config, "use_fdl", False):
-            # FDL-pytorch 1.0 executes CUDA code while its module is imported.
-            # Import it only after Accelerator has selected this process's device.
             from FDL_pytorch import FDL_loss
 
             self.fdl_loss = FDL_loss().to(self.device)
@@ -216,7 +209,6 @@ class BaseTrainer:
         ...
 
     def init_discriminator(self):
-        # Suppress logs from open-clip
         ctx = (
             nullcontext()
             if self.accelerator.is_local_main_process
@@ -338,7 +330,6 @@ class BaseTrainer:
             logger.info("DeepSpeed detected: preparing generator only with accelerator")
             self.G, self.G_opt = self.accelerator.prepare(self.G, self.G_opt)
             self.dataloader = self.accelerator.prepare_data_loader(self.dataloader)
-            # Prepare discriminator separately only when enabled
             if getattr(self.config, "use_D", False) and hasattr(self, "D") and self.D is not None:
                 self.D = self.D.to(self.device)
                 if self.accelerator.distributed_type != DistributedType.NO:
@@ -347,7 +338,6 @@ class BaseTrainer:
                         ddp_kwargs["device_ids"] = [self.accelerator.device.index]
                     self.D = torch.nn.parallel.DistributedDataParallel(self.D, **ddp_kwargs)
         else:
-            # Prepare only existing/required components when not using DeepSpeed
             attrs = ["G", "G_opt", "G_scheduler", "dataloader"]
             if getattr(self.config, "use_D", False) and hasattr(self, "D") and hasattr(self, "D_opt"):
                 attrs.extend(["D", "D_opt", "D_scheduler"])
@@ -381,7 +371,6 @@ class BaseTrainer:
     def on_training_start(self):
         self._save_config()
 
-        # Build ema state dict
         logger.info(f"Creating EMA handler, Use EMA = {self.config.use_ema}, EMA decay = {self.config.ema_decay}")
         if self.config.resume_from_checkpoint is not None and self.config.resume_ema:
             ema_resume_pth = os.path.join(self.config.resume_from_checkpoint, "ema_state_dict.pth")
@@ -402,11 +391,9 @@ class BaseTrainer:
             logger.info(f"Resuming from checkpoint {path}")
             accel_state_path = os.path.join(path, "model.safetensors")
             if os.path.exists(accel_state_path) and not getattr(self.config, "load_minimal_checkpoint", False):
-                # Full state exists (non-minimal): resume via accelerator
                 self.force_optimizer_ckpt_safe(path)
                 self.accelerator.load_state(path)
             else:
-                # Minimal checkpoint: load LoRA/trainable weights only
                 logger.info("Load LoRA/trainable weights only")
                 self._load_minimal_checkpoint(path)
             global_step = int(ckpt_name.split("-")[1])
@@ -491,11 +478,8 @@ class BaseTrainer:
         r_real = real_logits - torch.mean(fake_logits, dim=0, keepdim=True)
         r_fake = fake_logits - torch.mean(real_logits, dim=0, keepdim=True)
         
-        # 判别器目标：
-        # 1. 真实样本比假样本更真实 (r_real -> 1)
         loss_real = F.binary_cross_entropy_with_logits(r_real, torch.ones_like(r_real))
         
-        # 2. 假样本比真实样本更不真实 (r_fake -> 0)
         loss_fake = F.binary_cross_entropy_with_logits(r_fake, torch.zeros_like(r_fake))
         
         return (loss_real + loss_fake) / 2
@@ -504,11 +488,8 @@ class BaseTrainer:
         r_real = real_logits - torch.mean(fake_logits, dim=0, keepdim=True)
         r_fake = fake_logits - torch.mean(real_logits, dim=0, keepdim=True)
         
-        # 生成器目标（欺骗判别器，反转目标）：
-        # 1. 假样本看起来比真实样本更真实 (r_fake -> 1)
         loss_fake = F.binary_cross_entropy_with_logits(r_fake, torch.ones_like(r_fake))
         
-        # 2. 真实样本看起来比假样本更不真实 (r_real -> 0)
         loss_real = F.binary_cross_entropy_with_logits(r_real, torch.zeros_like(r_real))
         
         return (loss_real + loss_fake) / 2
@@ -526,7 +507,6 @@ class BaseTrainer:
         total_psnr = 0.0
         num_batches = 0
         
-        # Directory to save validation images
         val_save_dir = os.path.join(self.config.output_dir, self.config.logging_dir, "val_images", f"{self.global_step:07}")
         if self.accelerator.is_main_process:
             os.makedirs(val_save_dir, exist_ok=True)
@@ -542,7 +522,6 @@ class BaseTrainer:
                 else:
                     x, _ = self.forward_generator()
                 
-                # Metrics
                 pred_img = (x + 1) / 2
                 gt_img = (self.batch_inputs.gt + 1) / 2
                 loss = F.mse_loss(x, self.batch_inputs.gt)
@@ -552,12 +531,8 @@ class BaseTrainer:
                 total_psnr += psnr.item()
                 num_batches += 1
 
-                # Save images for the first few batches or specific interval
-                # Only save on main process to avoid write conflicts
-                if self.accelerator.is_main_process and i < 204: # Save first 5 batches
-                    # Concatenate GT and Pred for side-by-side comparison
-                    # x shape: [B, C, H, W]
-                    vis_imgs = torch.cat([gt_img, pred_img], dim=3) # Concat horizontally
+                if self.accelerator.is_main_process and i < 204:
+                    vis_imgs = torch.cat([gt_img, pred_img], dim=3)
                     
                     image_arrs = (vis_imgs * 255.0).clamp(0, 255).to(torch.uint8) \
                         .permute(0, 2, 3, 1).contiguous().cpu().numpy()
@@ -570,7 +545,6 @@ class BaseTrainer:
             self.ema_handler.deactivate_ema_weights()
         self.G.train()
 
-        # Aggregate metrics
         avg_loss = torch.tensor(total_loss / num_batches, device=self.device)
         avg_psnr = torch.tensor(total_psnr / num_batches, device=self.device)
         
@@ -587,11 +561,9 @@ class BaseTrainer:
 
     def optimize_generator_latent(self):
         ds_plugin = getattr(self.accelerator.state, "deepspeed_plugin", None)
-        # Avoid accelerate.accumulate (which uses no_sync) when ZeRO stage >= 2
         use_null_ctx = bool(ds_plugin and getattr(ds_plugin, "zero_stage", 0) >= 2)
         ctx = nullcontext() if use_null_ctx else self.accelerator.accumulate(self.G)
         with ctx:
-            # Discriminator is not used in latent-only optimization; guard access if exists
             if hasattr(self, "D") and self.D is not None:
                 self.unwrap_model(self.D).eval().requires_grad_(False)
             start_time = time.perf_counter()
@@ -601,8 +573,6 @@ class BaseTrainer:
             else:
                 latent = self.forward_generator()
             end_time = time.perf_counter()
-            # self.G_pred = x
-            # Compute MSE loss in float32 to avoid dtype mismatch with bf16 params/backward
             loss_l2 = F.mse_loss(latent.float(), self.batch_inputs.z_gt.float(), reduction="mean") * self.config.lambda_l2
             loss_G = loss_l2.float()
             if self.config.use_repa:
@@ -614,16 +584,12 @@ class BaseTrainer:
                 grad_norm = self.accelerator.clip_grad_norm_(self.G_params, self.config.max_grad_norm)
             self.G_opt.step()
             self.G_opt.zero_grad()
-        # Log something
         loss_dict = {"G_mse": loss_l2}
         if self.config.use_repa:
-            # 计算 REPA 损失项本身
             repa_loss_term = (1 - proj_loss) * self.config.proj_coef
             loss_dict['G_repa'] = repa_loss_term
-            # G_total 是两者的和
             loss_dict['G_total'] = loss_l2 + repa_loss_term
         else:
-            # 如果没有 repa，G_total 就是 G_mse
             loss_dict['G_total'] = loss_l2
 
         for k, v in loss_dict.items():
@@ -632,7 +598,6 @@ class BaseTrainer:
 
     def optimize_generator_image(self):
         ds_plugin = getattr(self.accelerator.state, "deepspeed_plugin", None)
-        # Avoid accelerate.accumulate (which uses no_sync) when ZeRO stage >= 2
         use_null_ctx = bool(ds_plugin and getattr(ds_plugin, "zero_stage", 0) >= 2)
         ctx = nullcontext() if use_null_ctx else self.accelerator.accumulate(self.G)
         with ctx:
@@ -651,9 +616,7 @@ class BaseTrainer:
 
             self.G_pred = x
             loss_l2 = F.mse_loss(x, self.batch_inputs.gt, reduction="mean") * self.config.lambda_l2
-            # loss_l2 = torch.zeros((), device=self.device, dtype=self.weight_dtype)
             loss_l1 = F.l1_loss(x, self.batch_inputs.gt, reduction="mean") * self.config.lambda_l1
-            # loss_l1 = torch.zeros((), device=self.device, dtype=self.weight_dtype)
             if not getattr(self.config, "use_dists", False):
                 loss_lpips = self.net_lpips(x, self.batch_inputs.gt).mean() * self.config.lambda_lpips
                 loss_dists = torch.zeros((), device=self.device, dtype=loss_l2.dtype)
@@ -665,7 +628,6 @@ class BaseTrainer:
                 edge_x = self.edge_detection_model(x)
                 edge_gt = self.edge_detection_model(self.batch_inputs.gt)
                 loss_edge = self.net_lpips(edge_x, edge_gt).mean() * self.config.lambda_edge_detect
-                # print(f"------------loss edge: {loss_edge}------------")
             else:
                 loss_edge = torch.zeros((), device=self.device, dtype=loss_l2.dtype)
 
@@ -673,7 +635,6 @@ class BaseTrainer:
                 tv_x = total_variation_loss(x)
                 tv_gt = total_variation_loss(self.batch_inputs.gt)
                 loss_tv = self.net_lpips(tv_x, tv_gt).mean() * self.config.lambda_tv
-                # print(f"------------loss tv: {loss_tv}------------")
             else:
                 loss_tv = torch.zeros((), device=self.device, dtype=loss_l2.dtype)
 
@@ -684,12 +645,10 @@ class BaseTrainer:
 
             if self.config.use_repa:
                 proj_loss = (1 - self.repa_loss(zs, zs_pred)) * self.config.proj_coef
-                # print(f"------------loss repa: {proj_loss}------------")
             else:
                 proj_loss = torch.zeros((), device=self.device, dtype=loss_l2.dtype)
 
             if getattr(self.config, "use_D", False) and hasattr(self, "D") and self.D is not None and not self.is_warmup:
-                # loss_disc = self.D(x, for_G=True, verbose=False).mean() * self.config.lambda_gan
 
                 _, fake_logits = D_unwrapped(x, for_G=True, verbose=False, return_logits=True)
                 with torch.no_grad():
@@ -697,7 +656,6 @@ class BaseTrainer:
                 
                 loss_disc = 0.0
                 for r, f in zip(real_logits, fake_logits):
-                    # RaGAN loss for Generator
                     loss_disc = loss_disc + self.relativistic_generator_loss(r, f)
                 loss_disc = loss_disc * self.config.lambda_gan
             else:
@@ -707,7 +665,6 @@ class BaseTrainer:
             self.accelerator.backward(loss_G)
             if self.accelerator.sync_gradients:
                 norm_before_clip = self.accelerator.clip_grad_norm_(self.G_params, self.config.max_grad_norm)
-                # norm_after_clip = self.accelerator.get_grad_norm(self.G_params, norm_type=2)
             self.G_opt.step()
             self.G_scheduler.step()
             self.G_opt.zero_grad()
@@ -715,9 +672,7 @@ class BaseTrainer:
             if hasattr(self, "refiner"):
                 self.refiner_opt.step()
                 self.refiner_opt.zero_grad()
-        # Log something
         loss_dict = dict(G_total=loss_G, G_mse=loss_l2, G_l1=loss_l1, G_lpips=loss_lpips , G_dists=loss_dists, G_disc=loss_disc, G_fdl=loss_fdl)
-        # logger.info(f"loss dict: {loss_dict}")
         return loss_dict, norm_before_clip
 
     def optimize_discriminator(self):
@@ -729,7 +684,6 @@ class BaseTrainer:
                 x, latents = self.forward_generator()
         self.G_pred = x
         ds_plugin = getattr(self.accelerator.state, "deepspeed_plugin", None)
-        # Avoid accelerate.accumulate (which uses no_sync) when ZeRO stage >= 2
         use_null_ctx = bool(ds_plugin and getattr(ds_plugin, "zero_stage", 0) >= 2)
         ctx = nullcontext() if use_null_ctx else self.accelerator.accumulate(self.D)
         with ctx:
@@ -737,23 +691,15 @@ class BaseTrainer:
             loss_D_real, real_logits = self.D(gt, for_real=True, return_logits=True)
             loss_D_fake, fake_logits = self.D(x, for_real=False, return_logits=True)
 
-            # _, real_logits = self.D(normalized_gt, for_real=True, return_logits=True)
-            # _, fake_logits = self.D(normalized_x, for_real=False, return_logits=True)
 
             loss_D = 0.0
             for r, f in zip(real_logits, fake_logits):
                 loss_D = loss_D + self.relativistic_discriminator_loss(r, f)
             
-            # loss_D_real, real_logits = self.D(gt, for_real=True, return_logits=True)
-            # loss_D_fake, fake_logits = self.D(x, for_real=False, return_logits=True)
-            # loss_D = loss_D_real.mean() + loss_D_fake.mean()
 
-            # calculate R1 loss
             if self.config.use_r1:    
                 lambda_r1 = getattr(self.config, "lambda_r1", 1000.0)
                 r1_sigma = getattr(self.config, "r1_sigma", 0.01)
-                # noise = torch.rand_like(normalized_gt, device=gt.device, dtype=gt.dtype) * r1_sigma
-                # noised_gt = normalized_gt + noise
                 noise = torch.rand_like(gt, device=gt.device, dtype=gt.dtype) * r1_sigma
                 noised_gt = gt + noise
                 _, real_logits_noisy = self.D(noised_gt, for_real=True, return_logits=True)
@@ -775,7 +721,6 @@ class BaseTrainer:
             self.accelerator.backward(loss_D)
             if self.accelerator.sync_gradients:
                 norm_before_clip = self.accelerator.clip_grad_norm_(self.D_params, self.config.max_grad_norm)
-                # norm_after_clip = self.accelerator.get_grad_norm(self.D_params, norm_type=2)
             self.D_opt.step()
             self.D_scheduler.step()
             self.D_opt.zero_grad()
@@ -784,7 +729,6 @@ class BaseTrainer:
             self.refiner_opt.step()
             self.refiner_opt.zero_grad()
         loss_dict = dict(D=loss_D, D_r1=approx_r1)
-        # logits = D(x) w/o sigmoid = log(p_real(x) / p_fake(x))
         with torch.no_grad():
             real_logits = torch.tensor([logit_map.mean() for logit_map in real_logits], device=self.device).mean()
             fake_logits = torch.tensor([logit_map.mean() for logit_map in fake_logits], device=self.device).mean()
@@ -804,7 +748,6 @@ class BaseTrainer:
                 self.prepare_batch_inputs(batch)
                 end_time = time.perf_counter()
                 prepare_time = end_time - start_time
-                # print(f"Take {prepare_time} to prepare inputs(most likely encode image)")
                 try:
                     bs = len(self.batch_inputs.lq)
                 except AttributeError:
@@ -814,7 +757,6 @@ class BaseTrainer:
                     self.is_warmup = self.global_step < warmup_steps
                 else:
                     self.is_warmup = False
-                # self.is_warmup = False
                 if self.config.use_D and not self.is_warmup:
                     generator_step = ((self.batch_count // self.config.gradient_accumulation_steps) % 2) == 0
                 else:
@@ -837,14 +779,11 @@ class BaseTrainer:
                 self.batch_count += 1
                 if self.accelerator.sync_gradients:
                     if generator_step:
-                        # update EMA
                         self.ema_handler.update()
                     state = "Generator     Step" if generator_step else "Discriminator Step"
-                    # state = "Generator     Step" if not generator_step else "Discriminator Step"
                     _, _, peak = print_vram_state(None)
                     self.pbar.set_description(f"{state}, VRAM peak: {peak:.2f} GB")
 
-                # Advance global step and log
                 if self.accelerator.sync_gradients:
                     should_advance = (not self.config.use_D and generator_step) or (self.config.use_D and not generator_step) or (self.config.use_D and generator_step and self.is_warmup)
                     if should_advance:
@@ -864,8 +803,6 @@ class BaseTrainer:
                         self.accelerator.log(log_dict, step=self.global_step)
                         if self.global_step % self.config.checkpointing_steps == 0 or self.global_step == 1:
                             self.save_checkpoint()
-                        # if (self.global_step % val_interval == 0 and self.global_step > 0) or self.global_step == 20000:
-                        #     self.validate()
                 if self.global_step >= self.config.max_train_steps:
                     break
         self.accelerator.end_training()
@@ -874,18 +811,14 @@ class BaseTrainer:
         N = 4
         try:
             image_logs = dict(
-                # lq=(self.batch_inputs.lq[:N] + 1) / 2,
                 gt=(self.batch_inputs.gt[:N] + 1) / 2,
                 G=(self.G_pred[:N] + 1) / 2,
-                # prompt=(log_txt_as_img((256, 256), self.batch_inputs.prompt[:N]) + 1) / 2,
             )
         except AttributeError:
             image_logs = dict(
                 G=(self.G_pred[:N] + 1) / 2,
-                # prompt=(log_txt_as_img((256, 256), self.batch_inputs.prompt[:N]) + 1) / 2,
             )
         if self.config.use_ema:
-            # recompute for EMA results
             self.ema_handler.activate_ema_weights()
             with torch.no_grad():
                 if self.config.use_repa:
@@ -918,11 +851,9 @@ class BaseTrainer:
                 Image.fromarray(img).save(os.path.join(save_dir, f"sample{i}.png"))
 
     def log_grads(self):
-    # 判别器可能未启用，安全处理
         if hasattr(self, "D") and self.D is not None:
             self.unwrap_model(self.D).eval().requires_grad_(False)
 
-        # --- 前向：与当前计算图一致地拿到输出 ---
         if self.config.use_vae:
             if self.config.use_repa:
                 x, latent, zs_pred = self.forward_generator()
@@ -934,13 +865,10 @@ class BaseTrainer:
             loss_l2 = F.mse_loss(x_float, gt_float, reduction="mean") * self.config.lambda_l2
             loss_lpips = self.net_lpips(x_float, gt_float).mean() * self.config.lambda_lpips
             
-            # Relativistic GAN Loss Calculation
             if hasattr(self, "D") and self.D is not None:
-                # Get Real Logits (No grad needed for G step)
                 with torch.no_grad():
                     _, real_logits = self.D(gt_float, for_real=True, return_logits=True)
                 
-                # Get Fake Logits
                 _, fake_logits = self.D(x_float, for_real=False, return_logits=True)
 
                 loss_disc = 0.0
@@ -959,13 +887,11 @@ class BaseTrainer:
             if self.config.use_repa:
                 losses.append(("lrepa", loss_repa))
 
-        # --- 逐项反向，记录 LoRA/目标模块梯度范数 ---
         grad_dict = {}
         self.G_opt.zero_grad(set_to_none=True)
         for idx, (name, loss) in enumerate(losses):
             retain_graph = idx != len(losses) - 1
             try:
-                # 调试当前 loss 名称
                 print(f"Current gradient's loss: {name}")
                 loss.backward(retain_graph=retain_graph)
             except RuntimeError as e:
@@ -975,7 +901,6 @@ class BaseTrainer:
             lora_module_grads = {}
             for module_name, module in self.unwrap_model(self.G).named_modules():
                 for suffix in getattr(self.config, "log_grad_modules", []):
-                    # if module_name.endswith(suffix):
                     if suffix in module_name:
                         grads = []
                         for p in module.parameters():
@@ -988,7 +913,6 @@ class BaseTrainer:
                             lora_module_grads.setdefault(suffix, []).append(flat_grad)
                         break
             for k, v in lora_module_grads.items():
-                # 跳过空列表，避免 cat 空张量
                 if not v:
                     continue
                 grad_dict[f"grad_norm/{k}_{name}"] = torch.norm(torch.cat(v, dim=0)).item()
@@ -1041,7 +965,6 @@ class BaseTrainer:
 
                 torch.save(refiner_state_dict, os.path.join(save_path, "refiner.pth"))
                 logger.info(f"Saved refiner weights to {save_path}/refiner.pth")
-            # Save ema weights (works for both modes)
             self.ema_handler.save_ema_weights(save_path)
             logger.info(f"Saved ema weights to {save_path}")
 

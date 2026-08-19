@@ -80,9 +80,6 @@ def load_trainable_weights(
             + "; ".join(problems)
         )
 
-    # Frozen base-model keys are absent from the minimal checkpoint by design.
-    # Merge them from the already-loaded base model so the actual load can use
-    # PyTorch's strict=True validation as a final guard.
     complete_state_dict = model.state_dict()
     complete_state_dict.update(state_dict)
     try:

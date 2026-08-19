@@ -33,20 +33,15 @@ def wavelet_blur(image: Tensor, radius: int):
     """
     Apply wavelet blur to the input tensor.
     """
-    # input shape: (1, 3, H, W)
-    # convolution kernel
     kernel_vals = [
         [0.0625, 0.125, 0.0625],
         [0.125, 0.25, 0.125],
         [0.0625, 0.125, 0.0625],
     ]
     kernel = torch.tensor(kernel_vals, dtype=image.dtype, device=image.device)
-    # add channel dimensions to the kernel to make it a 4D tensor
     kernel = kernel[None, None]
-    # repeat the kernel across all input channels
     kernel = kernel.repeat(3, 1, 1, 1)
     image = F.pad(image, (radius, radius, radius, radius), mode='replicate')
-    # apply convolution
     output = F.conv2d(image, kernel, groups=3, dilation=radius)
     return output
 
@@ -70,13 +65,10 @@ def wavelet_reconstruction(content_feat:Tensor, style_feat:Tensor):
     """
     Apply wavelet decomposition, so that the content will have the same color as the style.
     """
-    # calculate the wavelet decomposition of the content feature
     content_high_freq, content_low_freq = wavelet_decomposition(content_feat)
     del content_low_freq
-    # calculate the wavelet decomposition of the style feature
     style_high_freq, style_low_freq = wavelet_decomposition(style_feat)
     del style_high_freq
-    # reconstruct the content feature with the style's high frequency
     return content_high_freq + style_low_freq
 
 
@@ -96,7 +88,7 @@ def load_file_from_url(url, model_dir=None, progress=True, file_name=None):
     Returns:
         str: The path to the downloaded file.
     """
-    if model_dir is None:  # use the pytorch hub_dir
+    if model_dir is None:
         hub_dir = get_dir()
         model_dir = os.path.join(hub_dir, 'checkpoints')
 
@@ -135,7 +127,7 @@ def gaussian_weights(tile_width: int, tile_height: int) -> np.ndarray:
     latent_width = tile_width
     latent_height = tile_height
     var = 0.01
-    midpoint = (latent_width - 1) / 2  # -1 because index goes from 0 to latent_width - 1
+    midpoint = (latent_width - 1) / 2
     x_probs = [
         np.exp(-(x - midpoint) * (x - midpoint) / (latent_width * latent_width) / (2 * var)) / np.sqrt(2 * np.pi * var)
         for x in range(latent_width)]
@@ -168,7 +160,6 @@ def make_tiled_fn(
     progress: bool = True,
     desc: str=None,
 ) -> Callable[[torch.Tensor], torch.Tensor]:
-    # Only split the first input of function.
     def tiled_fn(x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         if scale_type == "up":
             scale_fn = lambda n: int(n * scale)
@@ -220,14 +211,11 @@ def make_tiled_fn(
 
 
 def log_txt_as_img(wh, xc):
-    # wh a tuple of (width, height)
-    # xc a list of captions to plot
     b = len(xc)
     txts = list()
     for bi in range(b):
         txt = Image.new("RGB", wh, color="white")
         draw = ImageDraw.Draw(txt)
-        # font = ImageFont.truetype('font/DejaVuSans.ttf', size=size)
         font = ImageFont.load_default()
         nc = int(40 * (wh[0] / 256))
         lines = "\n".join(

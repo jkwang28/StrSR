@@ -48,7 +48,6 @@ def write_manifest(
         manifest_file.write("\n")
 
 
-# Simple inference helper reusing trainer logic (zimage_val) instead of enhancer.
 class ZImageValInfer:
     def __init__(
         self,
@@ -114,7 +113,6 @@ class ZImageValInfer:
             )
             self.G = get_peft_model(self.G, lora_cfg)
             self.G.to(self.device)
-        # keep eval mode for inference
         self.G.eval()
 
     def _init_qwen(self):
@@ -231,7 +229,6 @@ class ZImageValInfer:
             prompt_embeds = self._encode_prompt(prompts)
         else:
             raise RuntimeError(f"Unsupported conditioning mode: {self.conditioning!r}")
-        # store as list to match trainer format
         self.c_txt = {"prompt_embeds": [embeds.to(self.device) for embeds in prompt_embeds]}
 
     def _step(self, latents, noise_pred, sigmas):
@@ -290,7 +287,7 @@ class ZImageValInfer:
 
         with torch.no_grad():
             outputs = self.qwen_model.model(**inputs, output_hidden_states=True)
-            last_hidden_state = outputs.last_hidden_state # [B, Seq_Len, Hidden]
+            last_hidden_state = outputs.last_hidden_state
         
         text_embeds_list = []
 
@@ -300,7 +297,7 @@ class ZImageValInfer:
 
             text_mask = (attn_mask == 1) & (input_ids != self.image_token_id)
 
-            text_tokens = last_hidden_state[i][text_mask]              # [N_txt, H_qwen]
+            text_tokens = last_hidden_state[i][text_mask]
             text_tokens = text_tokens.to(dtype=self.weight_dtype)
             proj_text_tokens = self.projector(text_tokens)
             text_embeds_list.append(proj_text_tokens)
@@ -366,8 +363,8 @@ def make_feather_mask(tile_h: int, tile_w: int, overlap: int, device: torch.devi
 
     wy = _hann(tile_h)
     wx = _hann(tile_w)
-    mask = torch.outer(wy, wx)  # [H, W]
-    mask = mask.unsqueeze(0).unsqueeze(0)  # [1,1,H,W]
+    mask = torch.outer(wy, wx)
+    mask = mask.unsqueeze(0).unsqueeze(0)
     return mask
 
 
@@ -375,7 +372,6 @@ def tile_coords(H: int, W: int, tile: int, overlap: int) -> Tuple[Tuple[int, int
     stride = max(1, tile - overlap)
     ys = list(range(0, max(1, H - tile + 1), stride))
     xs = list(range(0, max(1, W - tile + 1), stride))
-    # ensure coverage of right/bottom edges
     last_y = max(0, H - tile)
     last_x = max(0, W - tile)
     if ys[-1] != last_y:
@@ -399,7 +395,6 @@ def infer_tiled(
     if orig_H <= 0 or orig_W <= 0:
         raise ValueError("Invalid image size")
 
-    # Pad once so all patches respect DiT/VAE alignment (16 = VAE 8x * patch 2x)
     pad_h = (-orig_H) % 16
     pad_w = (-orig_W) % 16
     if pad_h or pad_w:
@@ -456,7 +451,6 @@ def infer_tiled(
     out = out.clamp(-1, 1)
     out = (out + 1.0) / 2.0
 
-    # Crop back to original size if we padded
     out = out[:, :, :orig_H, :orig_W]
     return out
 

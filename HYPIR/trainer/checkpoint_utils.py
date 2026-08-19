@@ -17,7 +17,7 @@ def _load_state_dict(path):
     """Load a tensor-only checkpoint on CPU across supported torch versions."""
     try:
         return torch.load(path, map_location="cpu", weights_only=True)
-    except TypeError:  # torch < 2.0
+    except TypeError:
         return torch.load(path, map_location="cpu")
 
 
@@ -60,8 +60,6 @@ def load_trainable_state_dict(model, path):
             f"Minimal checkpoint key mismatch in {path}; " + "; ".join(problems)
         )
 
-    # Frozen base-model keys are intentionally absent; strict=False is safe
-    # here because the exact trainable-key set was checked above.
     return model.load_state_dict(state_dict, strict=False)
 
 

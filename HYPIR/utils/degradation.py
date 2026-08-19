@@ -8,12 +8,8 @@ from scipy import special
 from scipy.stats import multivariate_normal
 from torchvision.transforms._functional_tensor import rgb_to_grayscale
 
-# -------------------------------------------------------------------- #
-# --------------------------- blur kernels --------------------------- #
-# -------------------------------------------------------------------- #
 
 
-# --------------------------- util functions --------------------------- #
 def sigma_matrix2(sig_x, sig_y, theta):
     """Calculate the rotated sigma matrix (two dimensional matrix).
 
@@ -209,7 +205,6 @@ def random_bivariate_Gaussian(kernel_size,
 
     kernel = bivariate_Gaussian(kernel_size, sigma_x, sigma_y, rotation, isotropic=isotropic)
 
-    # add multiplicative noise
     if noise_range is not None:
         assert noise_range[0] < noise_range[1], 'Wrong noise range.'
         noise = np.random.uniform(noise_range[0], noise_range[1], size=kernel.shape)
@@ -253,7 +248,6 @@ def random_bivariate_generalized_Gaussian(kernel_size,
         sigma_y = sigma_x
         rotation = 0
 
-    # assume beta_range[0] < 1 < beta_range[1]
     if np.random.uniform() < 0.5:
         beta = np.random.uniform(beta_range[0], 1)
     else:
@@ -261,7 +255,6 @@ def random_bivariate_generalized_Gaussian(kernel_size,
 
     kernel = bivariate_generalized_Gaussian(kernel_size, sigma_x, sigma_y, rotation, beta, isotropic=isotropic)
 
-    # add multiplicative noise
     if noise_range is not None:
         assert noise_range[0] < noise_range[1], 'Wrong noise range.'
         noise = np.random.uniform(noise_range[0], noise_range[1], size=kernel.shape)
@@ -305,14 +298,12 @@ def random_bivariate_plateau(kernel_size,
         sigma_y = sigma_x
         rotation = 0
 
-    # TODO: this may be not proper
     if np.random.uniform() < 0.5:
         beta = np.random.uniform(beta_range[0], 1)
     else:
         beta = np.random.uniform(1, beta_range[1])
 
     kernel = bivariate_plateau(kernel_size, sigma_x, sigma_y, rotation, beta, isotropic=isotropic)
-    # add multiplicative noise
     if noise_range is not None:
         assert noise_range[0] < noise_range[1], 'Wrong noise range.'
         noise = np.random.uniform(noise_range[0], noise_range[1], size=kernel.shape)
@@ -410,11 +401,7 @@ def circular_lowpass_kernel(cutoff, kernel_size, pad_to=0):
     return kernel
 
 
-# ------------------------------------------------------------- #
-# --------------------------- noise --------------------------- #
-# ------------------------------------------------------------- #
 
-# ----------------------- Gaussian Noise ----------------------- #
 
 
 def generate_gaussian_noise(img, sigma=10, gray_noise=False):
@@ -482,7 +469,6 @@ def generate_gaussian_noise_pt(img, sigma=10, gray_noise=0):
         noise_gray = torch.randn(*img.size()[2:4], dtype=img.dtype, device=img.device) * sigma / 255.
         noise_gray = noise_gray.view(b, 1, h, w)
 
-    # always calculate color noise
     noise = torch.randn(*img.size(), dtype=img.dtype, device=img.device) * sigma / 255.
 
     if cal_gray_noise:
@@ -512,7 +498,6 @@ def add_gaussian_noise_pt(img, sigma=10, gray_noise=0, clip=True, rounds=False):
     return out
 
 
-# ----------------------- Random Gaussian Noise ----------------------- #
 def random_generate_gaussian_noise(img, sigma_range=(0, 10), gray_prob=0):
     sigma = np.random.uniform(sigma_range[0], sigma_range[1])
     if np.random.uniform() < gray_prob:
@@ -554,7 +539,6 @@ def random_add_gaussian_noise_pt(img, sigma_range=(0, 1.0), gray_prob=0, clip=Tr
     return out
 
 
-# ----------------------- Poisson (Shot) Noise ----------------------- #
 
 
 def generate_poisson_noise(img, scale=1.0, gray_noise=False):
@@ -573,7 +557,6 @@ def generate_poisson_noise(img, scale=1.0, gray_noise=False):
     """
     if gray_noise:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # round and clip image for counting vals correctly
     img = np.clip((img * 255.0).round(), 0, 255) / 255.
     vals = len(np.unique(img))
     vals = 2**np.ceil(np.log2(vals))
@@ -629,9 +612,7 @@ def generate_poisson_noise_pt(img, scale=1.0, gray_noise=0):
         cal_gray_noise = torch.sum(gray_noise) > 0
     if cal_gray_noise:
         img_gray = rgb_to_grayscale(img, num_output_channels=1)
-        # round and clip image for counting vals correctly
         img_gray = torch.clamp((img_gray * 255.0).round(), 0, 255) / 255.
-        # use for-loop to get the unique values for each sample
         vals_list = [len(torch.unique(img_gray[i, :, :, :])) for i in range(b)]
         vals_list = [2**np.ceil(np.log2(vals)) for vals in vals_list]
         vals = img_gray.new_tensor(vals_list).view(b, 1, 1, 1)
@@ -639,10 +620,7 @@ def generate_poisson_noise_pt(img, scale=1.0, gray_noise=0):
         noise_gray = out - img_gray
         noise_gray = noise_gray.expand(b, 3, h, w)
 
-    # always calculate color noise
-    # round and clip image for counting vals correctly
     img = torch.clamp((img * 255.0).round(), 0, 255) / 255.
-    # use for-loop to get the unique values for each sample
     vals_list = [len(torch.unique(img[i, :, :, :])) for i in range(b)]
     vals_list = [2**np.ceil(np.log2(vals)) for vals in vals_list]
     vals = img.new_tensor(vals_list).view(b, 1, 1, 1)
@@ -680,7 +658,6 @@ def add_poisson_noise_pt(img, scale=1.0, clip=True, rounds=False, gray_noise=0):
     return out
 
 
-# ----------------------- Random Poisson (Shot) Noise ----------------------- #
 
 
 def random_generate_poisson_noise(img, scale_range=(0, 1.0), gray_prob=0):
@@ -724,9 +701,6 @@ def random_add_poisson_noise_pt(img, scale_range=(0, 1.0), gray_prob=0, clip=Tru
     return out
 
 
-# ------------------------------------------------------------------------ #
-# --------------------------- JPEG compression --------------------------- #
-# ------------------------------------------------------------------------ #
 
 
 def add_jpg_compression(img, quality=90):

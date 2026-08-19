@@ -11,7 +11,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-# ------------------------ utils ------------------------#
 y_table = np.array(
     [[16, 11, 10, 16, 24, 40, 51, 61], [12, 12, 14, 19, 26, 58, 60, 55], [14, 13, 16, 24, 40, 57, 69, 56],
      [14, 17, 22, 29, 51, 87, 80, 62], [18, 22, 37, 56, 68, 109, 103, 77], [24, 35, 55, 64, 81, 104, 113, 92],
@@ -46,7 +45,6 @@ def quality_to_factor(quality):
     return quality / 100.
 
 
-# ------------------------ compression ------------------------#
 class RGB2YCbCrJpeg(nn.Module):
     """ Converts RGB image to YCbCr
     """
@@ -242,7 +240,6 @@ class CompressJpeg(nn.Module):
         return components['y'], components['cb'], components['cr']
 
 
-# ------------------------ decompression ------------------------#
 
 
 class YDequantize(nn.Module):
@@ -436,7 +433,6 @@ class DeCompressJpeg(nn.Module):
                 height, width = imgh, imgw
             comp = self.idct(comp)
             components[k] = self.merging(comp, height, width)
-            #
         image = self.chroma(components['y'], components['cb'], components['cr'])
         image = self.colors(image)
 
@@ -444,7 +440,6 @@ class DeCompressJpeg(nn.Module):
         return image / 255
 
 
-# ------------------------ main DiffJPEG ------------------------ #
 
 
 class DiffJPEG(nn.Module):
@@ -479,7 +474,6 @@ class DiffJPEG(nn.Module):
                 factor[i] = quality_to_factor(factor[i])
         h, w = x.size()[-2:]
         h_pad, w_pad = 0, 0
-        # why should use 16
         if h % 16 != 0:
             h_pad = 16 - h % 16
         if w % 16 != 0:

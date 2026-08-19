@@ -48,7 +48,6 @@ def write_manifest(
         manifest_file.write("\n")
 
 
-# Simple inference helper reusing Flux trainer logic instead of enhancer.
 class FluxValInfer:
     def __init__(
         self,
@@ -117,7 +116,6 @@ class FluxValInfer:
             )
             self.G = get_peft_model(self.G, lora_cfg)
             self.G.to(self.device)
-        # keep eval mode for inference
         self.G.eval()
 
     def _resolve_lora_targets(self, model: torch.nn.Module, target_patterns: List[str]) -> List[str]:
@@ -203,8 +201,6 @@ class FluxValInfer:
         if self.conditioning == "qwen":
             if lq is None:
                 raise ValueError("FLUX Qwen conditioning requires the original low-resolution LQ image.")
-            # Qwen must see the original LR image.  The caller separately sends the
-            # bicubic-upscaled image through the VAE/DiT path.
             raw_lq = lq.float().to(self.device).clamp(0, 1)
             text_embeds, text_ids = self.extract_qwen_feature(raw_lq, prompts)
         elif self.conditioning == "txt":
@@ -424,8 +420,8 @@ def make_feather_mask(tile_h: int, tile_w: int, overlap: int, device: torch.devi
 
     wy = _hann(tile_h)
     wx = _hann(tile_w)
-    mask = torch.outer(wy, wx)  # [H, W]
-    mask = mask.unsqueeze(0).unsqueeze(0)  # [1,1,H,W]
+    mask = torch.outer(wy, wx)
+    mask = mask.unsqueeze(0).unsqueeze(0)
     return mask
 
 
@@ -433,7 +429,6 @@ def tile_coords(H: int, W: int, tile: int, overlap: int) -> Tuple[Tuple[int, int
     stride = max(1, tile - overlap)
     ys = list(range(0, max(1, H - tile + 1), stride))
     xs = list(range(0, max(1, W - tile + 1), stride))
-    # ensure coverage of right/bottom edges
     last_y = max(0, H - tile)
     last_x = max(0, W - tile)
     if ys[-1] != last_y:
@@ -457,7 +452,6 @@ def infer_tiled(
     if orig_H <= 0 or orig_W <= 0:
         raise ValueError("Invalid image size")
 
-    # Pad once so all patches respect DiT/VAE alignment (16 = VAE 8x * patch 2x)
     pad_h = (-orig_H) % 16
     pad_w = (-orig_W) % 16
     if pad_h or pad_w:
@@ -515,7 +509,6 @@ def infer_tiled(
     out = out.clamp(-1, 1)
     out = (out + 1.0) / 2.0
 
-    # Crop back to original size if we padded
     out = out[:, :, :orig_H, :orig_W]
     return out
 
@@ -686,7 +679,6 @@ def main():
         try:
             img_lq = load_image_as_tensor(lq_path)
             img_hr = bicubic_upscale(img_lq, scale_factor=args.bicubic_scale)
-            # VAE/DiT receives the 4x input, while Qwen receives the raw LR image.
             out_t = infer_tiled(
                 img_hr,
                 model,

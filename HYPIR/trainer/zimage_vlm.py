@@ -39,7 +39,6 @@ from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 from qwen_vl_utils import process_vision_info
 logger = get_logger(__name__, log_level="INFO")
 
-# Copied from dreambooth sd3 example
 def import_model_class_from_model_name_or_path(
     pretrained_model_name_or_path: str, subfolder: str = "text_encoder"
 ):
@@ -55,7 +54,6 @@ def import_model_class_from_model_name_or_path(
         raise "Invalid Text Encoder"
 
 
-# Copied from dreambooth sd3 example
 def load_text_encoder(class_text_encoder, args):
     text_encoder = class_text_encoder.from_pretrained(
         args.base_model_path, subfolder="text_encoder"
@@ -64,8 +62,8 @@ def load_text_encoder(class_text_encoder, args):
 
 class ZImageVLMTrainer(BaseTrainer):
     def step(self, latents, noise_pred, sigmas, step_i):
-        return latents.float() - (sigmas[step_i] - sigmas[step_i + 1]) * noise_pred.float()    
-    
+        return latents.float() - (sigmas[step_i] - sigmas[step_i + 1]) * noise_pred.float()
+
     def init_scheduler(self):
         self.scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
             self.config.base_model_path, subfolder="scheduler"
@@ -73,11 +71,7 @@ class ZImageVLMTrainer(BaseTrainer):
 
     def init_dataset(self):
         super().init_dataset()
-        # load from saved debug inputs
-        # if not self.config.use_txt:
-            # pos_promt_emb = torch.load(f"debug_inputs/prompt_embeds.pt")
-            # self.c_txt = {"prompt_embeds": [pos_promt_emb.to(self.device)]}
-        
+
     def prepare_batch_inputs(self, batch, transform=None):
         if transform == None:
             transform = self.batch_transform
@@ -111,7 +105,7 @@ class ZImageVLMTrainer(BaseTrainer):
             z_lq=z_lq, z_gt=z_gt,
             timesteps=timesteps,
         )
-        
+
     def init_models(self):
         print(f"Use VAE: {self.config.use_vae}, Use D: {self.config.use_D}, Use EMA: {self.config.use_ema}")
         self.init_scheduler()
@@ -162,17 +156,17 @@ class ZImageVLMTrainer(BaseTrainer):
     def init_qwen(self):
         logger.info("Loading Qwen3-VL for visual conditioning...")
         model_path = self.config.qwen_model_path
-        
+
         self.qwen_model = Qwen3VLForConditionalGeneration.from_pretrained(
-            model_path, 
-            torch_dtype=torch.bfloat16, 
+            model_path,
+            torch_dtype=torch.bfloat16,
             device_map=self.device,
             attn_implementation="flash_attention_2"
         ).eval()
         self.qwen_model.requires_grad_(False)
-        
+
         self.qwen_processor = AutoProcessor.from_pretrained(model_path)
-        
+
         self.image_token_id = self.qwen_model.config.image_token_id
         self.qwen_hidden_size = self.qwen_model.config.text_config.hidden_size
         logger.info(f"✓ Qwen3-VL loaded. Hidden size: {self.qwen_hidden_size}")
@@ -188,9 +182,9 @@ class ZImageVLMTrainer(BaseTrainer):
 
     def init_generator(self):
         self.G = ZImageTransformer2DModel.from_pretrained(
-            self.config.base_model_path, 
+            self.config.base_model_path,
             low_cpu_mem_usage=False,
-            subfolder="transformer", 
+            subfolder="transformer",
             torch_dtype=self.weight_dtype
         ).to(self.device)
 
@@ -216,7 +210,6 @@ class ZImageVLMTrainer(BaseTrainer):
                 target_modules=target_patterns,
             )
             self.G = get_peft_model(self.G, G_lora_cfg)
-            # mark_only_lora_as_trainable(self.G)
             lora_params = [p for p in self.G.parameters() if p.requires_grad]
             assert lora_params, "Failed to find LoRA parameters"
             for p in lora_params:
@@ -227,15 +220,10 @@ class ZImageVLMTrainer(BaseTrainer):
         else:
             logger.warning("LoRA modules list is empty; generator will remain frozen.")
 
-        # if getattr(self.config, "use_qwen", False):
-        #     self.init_qwen_projector()
         self._set_byt5_precision(self.weight_dtype)
-        # Ensure module is in training mode so gradient checkpointing can take effect,
-        # while keeping only LoRA params trainable
         self.G.train()
 
     def init_discriminator(self):
-        # Suppress logs from open-clip
         ctx = (
             nullcontext()
             if self.accelerator.is_local_main_process
@@ -262,17 +250,17 @@ class ZImageVLMTrainer(BaseTrainer):
             if any(module_name.endswith(pattern) for pattern in target_patterns):
                 matched.append(module_name)
         return sorted(set(matched))
-        
+
     def init_text_models(self):
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.config.base_model_path,
             subfolder="tokenizer",
         )
-        
+
         self.text_encoder_cls = import_model_class_from_model_name_or_path(
             self.config.base_model_path, subfolder = "text_encoder"
         )
-        
+
         self.text_encoder = load_text_encoder(
             self.text_encoder_cls, self.config
         )
@@ -331,7 +319,7 @@ class ZImageVLMTrainer(BaseTrainer):
             embeddings_list.append(prompt_embeds[i][prompt_masks[i]])
 
         return embeddings_list
-    
+
     def encode_prompt(
         self,
         prompt: Union[str, List[str]],
@@ -369,9 +357,9 @@ class ZImageVLMTrainer(BaseTrainer):
     def extract_qwen_feature(self, lq, prompts):
         batch_size = len(prompts)
         lq_images_denorm = (lq * 255).clamp(0, 255).to(torch.uint8).permute(0, 2, 3, 1).cpu().numpy()
-        
+
         from PIL import Image
-        
+
         messages_batch = []
         for i in range(batch_size):
             img_pil = Image.fromarray(lq_images_denorm[i])
@@ -380,19 +368,18 @@ class ZImageVLMTrainer(BaseTrainer):
                     "role": "user",
                     "content": [
                         {"type": "image", "image": img_pil},
-                        {"type": "text", "text": prompts[i]}, # 使用 prompt 引导 Qwen 关注特定内容
+                        {"type": "text", "text": prompts[i]},
                     ],
                 }
             ]
             messages_batch.append(messages)
 
-        # 注意：process_vision_info 需要逐个处理
         texts = [
             self.qwen_processor.apply_chat_template(msg, tokenize=False, add_generation_prompt=True)
             for msg in messages_batch
         ]
         image_inputs, video_inputs = process_vision_info(messages_batch)
-        
+
         inputs = self.qwen_processor(
             text=texts,
             images=image_inputs,
@@ -404,12 +391,9 @@ class ZImageVLMTrainer(BaseTrainer):
 
         with torch.no_grad():
             outputs = self.qwen_model.model(**inputs, output_hidden_states=True)
-            last_hidden_state = outputs.last_hidden_state # [B, Seq_Len, Hidden]
+            last_hidden_state = outputs.last_hidden_state
 
-        # base_model = self.G.module if hasattr(self.G, "module") else self.G
-        # projector = base_model.qwen_projector
-        # proj_dtype = next(projector.parameters()).dtype
-        
+
         visual_embeds_list, text_embeds_list = [], []
 
         for i in range(batch_size):
@@ -420,17 +404,17 @@ class ZImageVLMTrainer(BaseTrainer):
             text_mask = (attn_mask == 1) & (input_ids != self.image_token_id)
 
 
-            vis_tokens = last_hidden_state[i][image_mask]              # [N_vis, H_qwen]
+            vis_tokens = last_hidden_state[i][image_mask]
             vis_tokens = vis_tokens.to(dtype=self.weight_dtype)
             visual_embeds_list.append(vis_tokens)
 
-            text_tokens = last_hidden_state[i][text_mask]              # [N_txt, H_qwen]
+            text_tokens = last_hidden_state[i][text_mask]
             text_tokens = text_tokens.to(dtype=self.weight_dtype)
             proj_text_tokens = self.projector(text_tokens)
             text_embeds_list.append(proj_text_tokens)
 
         return visual_embeds_list, text_embeds_list
-    
+
     def attach_accelerator_hooks(self):
         def save_model_hook(models, weights, output_dir):
             if self.accelerator.is_main_process:
@@ -446,8 +430,7 @@ class ZImageVLMTrainer(BaseTrainer):
                 torch.save(state_dict, os.path.join(output_dir, "state_dict.pth"))
                 for i, model in enumerate(models):
                     unwrapped = self.unwrap_model(model)
-                    
-                    # 保存 Projector
+
                     if hasattr(self, "projector") and unwrapped is self.unwrap_model(self.projector):
                         torch.save(unwrapped.state_dict(), os.path.join(output_dir, "projector.pth"))
                         weights.pop(i-1)
@@ -469,7 +452,7 @@ class ZImageVLMTrainer(BaseTrainer):
                 logger.info(f"Successfully loaded LoRA weights. Ignored {len(missing)} missing keys for frozen base model parameters.")
             if unexpected:
                 logger.info(f"LoRA unexpected keys: {unexpected}")
-                
+
             for i, model in enumerate(models):
                 unwrapped = self.unwrap_model(model)
                 if hasattr(self, "projector") and unwrapped is self.unwrap_model(self.projector):
@@ -485,7 +468,6 @@ class ZImageVLMTrainer(BaseTrainer):
 
     def _set_byt5_precision(self, dtype: torch.dtype):
         base_model = self.G
-        # unwrap Peft or DDP wrappers to reach underlying module
         if hasattr(base_model, "get_base_model"):
             base_model = base_model.get_base_model()
         if hasattr(base_model, "module"):
@@ -495,7 +477,6 @@ class ZImageVLMTrainer(BaseTrainer):
             logger.warning("ByT5 module not found; skip precision adjustment")
             return
         byt5_module.to(device=self.device, dtype=dtype)
-        # ensure LayerNorm params stay in desired dtype
         if hasattr(byt5_module, "layernorm"):
             byt5_module.layernorm.to(dtype=dtype)
         for param in byt5_module.parameters():
@@ -528,35 +509,32 @@ class ZImageVLMTrainer(BaseTrainer):
             base_model = self.G.module if hasattr(self.G, "module") else self.G
 
         guidance_expand = None
-        
+
         noise_pred= self.G(
             latent_model_input_list,
             timestep_model_input,
             prompt_embeds_model_input,
         )[0]
-        
+
         return noise_pred
-    
+
     def forward_generator(self):
         t_expand = (1000 - self.batch_inputs.timesteps) / 1000
         sigmas = torch.tensor([self.config.coeff_t / 1000.0, 0]).to(dtype=torch.float32, device=self.device)
         latent_model_input = self.batch_inputs.z_lq
         model_out_list = self._denoise_step(
-            latent_model_input, t_expand, 
+            latent_model_input, t_expand,
             self.c_txt["text_embeds"],
             timesteps_r=None
         )
         noise_pred = torch.stack([t.float() for t in model_out_list], dim=0)
         noise_pred = noise_pred.squeeze(2)
         noise_pred = -noise_pred
-        # noise_pred = -noise_pred
-        # print_vram_state("After _denoise_step (G forward)", logger=logger)
         latents = self.step(latent_model_input, noise_pred, sigmas, 0)
 
-        # If we are training in latent space, return latents directly
         if not getattr(self.config, "use_vae", True):
             return latents
-        
+
         x = self._decode_latents(latents.to(self.weight_dtype)).float()
         return x, latents
 
@@ -568,7 +546,7 @@ class ZImageVLMTrainer(BaseTrainer):
 
         latents = latents.to(dtype=self.weight_dtype).contiguous()
         image = self.vae.decode(latents, return_dict=False)[0]
-        
+
         if getattr(self.config, "use_refiner", False):
             image = self.refiner(image)
         return image
