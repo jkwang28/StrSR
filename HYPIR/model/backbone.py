@@ -16,7 +16,7 @@ def _visual_forward(
     x, intermediates = model.visual.trunk.forward_intermediates(
         image,
         indices=None,
-        norm=False, # useless
+        norm=False,  # useless
         stop_early=False,
         intermediates_only=False,
     )

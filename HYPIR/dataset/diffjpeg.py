@@ -45,7 +45,7 @@ def quality_to_factor(quality):
         quality = 200. - quality * 2
     return quality / 100.
 
-#  ------------------------ compression ------------------------#
+# ------------------------ compression ------------------------#
 class RGB2YCbCrJpeg(nn.Module):
     """ Converts RGB image to YCbCr
     """

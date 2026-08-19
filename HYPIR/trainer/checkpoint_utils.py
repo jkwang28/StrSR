@@ -18,6 +18,7 @@ def _load_state_dict(path):
     try:
         return torch.load(path, map_location="cpu", weights_only=True)
     except TypeError:
+        # Older torch.load implementations do not accept weights_only.
         return torch.load(path, map_location="cpu")
 
 

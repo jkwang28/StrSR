@@ -213,6 +213,7 @@ class BaseTrainer(ABC):
         raise NotImplementedError
 
     def init_discriminator(self):
+        # Suppress OpenCLIP log noise on non-main workers.
         ctx = (
             nullcontext()
             if self.accelerator.is_local_main_process
@@ -697,6 +698,7 @@ class BaseTrainer(ABC):
                 x, _ = self.forward_generator()
         self.G_pred = x
         ds_plugin = getattr(self.accelerator.state, "deepspeed_plugin", None)
+        # Avoid accelerate.accumulate (which uses no_sync) when ZeRO stage >= 2
         use_null_ctx = bool(ds_plugin and getattr(ds_plugin, "zero_stage", 0) >= 2)
         ctx = nullcontext() if use_null_ctx else self.accelerator.accumulate(self.D)
         norm_before_clip = torch.zeros((), device=self.device)
@@ -871,10 +873,14 @@ class BaseTrainer(ABC):
             loss_l2 = F.mse_loss(x_float, gt_float, reduction="mean") * self.config.lambda_l2
             loss_lpips = self.net_lpips(x_float, gt_float).mean() * self.config.lambda_lpips
 
+            # Relativistic GAN Loss Calculation
+
             if hasattr(self, "D") and self.D is not None:
+                # Get Real Logits (No grad needed for G step)
                 with torch.no_grad():
                     _, real_logits = self.D(gt_float, for_real=True, return_logits=True)
 
+                # Get Fake Logits
                 _, fake_logits = self.D(x_float, for_real=False, return_logits=True)
 
                 loss_disc = 0.0

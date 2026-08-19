@@ -24,6 +24,7 @@ from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 from qwen_vl_utils import process_vision_info
 logger = get_logger(__name__, log_level="INFO")
 
+# Adapted from the diffusers SD3 DreamBooth example.
 def import_model_class_from_model_name_or_path(
     pretrained_model_name_or_path: str, subfolder: str = "text_encoder"
 ):
@@ -90,9 +91,8 @@ class ZImageVLMTrainer(BaseTrainer):
         )
 
     def init_models(self):
-        if not getattr(self.config, "use_qwen", False) and not getattr(
-            self.config, "use_txt", False
-        ):
+        if (not getattr(self.config, "use_qwen", False)
+        ) and not getattr(self.config, "use_txt", False):
             raise ValueError("Enable either use_qwen or use_txt for conditioning")
         logger.info(
             "Initializing models: VAE=%s, discriminator=%s, EMA=%s",
@@ -211,11 +211,12 @@ class ZImageVLMTrainer(BaseTrainer):
             logger.warning("LoRA modules list is empty; generator will remain frozen.")
 
         self._set_byt5_precision(self.weight_dtype)
-        # Keep training mode for gradient checkpointing; train() does not alter
-        # the existing requires_grad mask.
+        # Ensure module is in training mode so gradient checkpointing can take effect,
+        # while keeping only LoRA params trainable
         self.G.train()
 
     def init_discriminator(self):
+        # Suppress OpenCLIP log noise on non-main workers.
         ctx = (
             nullcontext()
             if self.accelerator.is_local_main_process
@@ -458,6 +459,7 @@ class ZImageVLMTrainer(BaseTrainer):
 
     def _set_byt5_precision(self, dtype: torch.dtype):
         base_model = self.G
+        # Unwrap PEFT or DDP wrappers to reach the underlying module.
         if hasattr(base_model, "get_base_model"):
             base_model = base_model.get_base_model()
         if hasattr(base_model, "module"):
@@ -467,6 +469,7 @@ class ZImageVLMTrainer(BaseTrainer):
             logger.warning("ByT5 module not found; skip precision adjustment")
             return
         byt5_module.to(device=self.device, dtype=dtype)
+        # Keep LayerNorm parameters in the requested dtype.
         if hasattr(byt5_module, "layernorm"):
             byt5_module.layernorm.to(dtype=dtype)
         for param in byt5_module.parameters():
@@ -495,10 +498,6 @@ class ZImageVLMTrainer(BaseTrainer):
 
         latent_model_input = latent_model_input.unsqueeze(2)
         latent_model_input_list = list(latent_model_input.unbind(dim=0))
-        if getattr(self, "accelerator", None) is None or self.accelerator.is_local_main_process:
-            base_model = self.G.module if hasattr(self.G, "module") else self.G
-
-        guidance_expand = None
 
         noise_pred= self.G(
             latent_model_input_list,
@@ -522,6 +521,7 @@ class ZImageVLMTrainer(BaseTrainer):
         noise_pred = -noise_pred
         latents = self.step(latent_model_input, noise_pred, sigmas, 0)
 
+        # Latent-space training bypasses VAE decoding.
         if not getattr(self.config, "use_vae", True):
             return latents
 

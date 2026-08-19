@@ -73,7 +73,7 @@ def load_file_meta(file_meta: Dict[str, str]) -> List[Dict[str, str]]:
                     added += 1
                     if max_count is not None and added >= max_count:
                         break
-            else:
+            else:  # random mode with sampling
                 n_total = df.height
                 n_take = min(max_count, n_total)
                 if n_take > 0:
@@ -227,6 +227,9 @@ def load_file_meta(file_meta: Dict[str, str]) -> List[Dict[str, str]]:
 
 # https://github.com/openai/guided-diffusion/blob/main/guided_diffusion/image_datasets.py
 def center_crop_arr(pil_image, image_size):
+    # We are not on a new enough PIL to support the `reducing_gap`
+    # argument, which uses BOX downsampling at powers of two first.
+    # Thus, we do it by hand to improve downsample quality.
     while min(*pil_image.size) >= 2 * image_size:
         pil_image = pil_image.resize(
             tuple(x // 2 for x in pil_image.size), resample=Image.BOX

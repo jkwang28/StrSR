@@ -229,6 +229,7 @@ class ZImageValInfer:
             prompt_embeds = self._encode_prompt(prompts)
         else:
             raise RuntimeError(f"Unsupported conditioning mode: {self.conditioning!r}")
+        # store as list to match trainer format
         self.c_txt = {"prompt_embeds": [embeds.to(self.device) for embeds in prompt_embeds]}
 
     def _step(self, latents, noise_pred, sigmas):

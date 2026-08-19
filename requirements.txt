@@ -25,3 +25,4 @@ wheel
 setuptools<81
 deepspeed
 fdl-pytorch==1.0
+# pyiqa: pip install --no-deps pyiqa==0.1.15.post2

@@ -1,10 +1,12 @@
 import torch
 from torch import nn
+from torchvision.transforms.functional import rgb_to_grayscale
 
 
 class EdgeDetectionModel(nn.Module):
     def __init__(self):
         super().__init__()
+        # Sobel filters for edge detection
         self.sobel_x = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
         self.sobel_y = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
 
@@ -22,15 +24,19 @@ class EdgeDetectionModel(nn.Module):
             sobel_y_kernel.view(1, 1, 3, 3), requires_grad=False
         )
 
-    def forward(self, image):
-        if image.shape[1] == 3:
-            red, green, blue = image.unbind(dim=1)
-            image = (
-                0.2989 * red + 0.5870 * green + 0.1140 * blue
-            ).unsqueeze(1)
-        edge_x = self.sobel_x(image)
-        edge_y = self.sobel_y(image)
-        return torch.sqrt(edge_x.square() + edge_y.square() + 1e-6)
+    def forward(self, x):
+        # Convert to grayscale if needed
+        if x.shape[1] == 3:
+            x = rgb_to_grayscale(x, num_output_channels=1)
+
+        # Apply Sobel filters
+        edge_x = self.sobel_x(x)
+        edge_y = self.sobel_y(x)
+
+        # Calculate gradient magnitude (edge detection result)
+        edges = torch.sqrt(edge_x ** 2 + edge_y ** 2 + 1e-6)
+
+        return edges
 
 
 def total_variation_loss(image):
