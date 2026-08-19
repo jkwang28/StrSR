@@ -165,7 +165,7 @@ class BaseTrainer:
     @overload
     def init_scheduler(self):
         ...
-    
+
     def init_repa(self):
         ...
 
@@ -263,7 +263,7 @@ class BaseTrainer:
             optimizer_cls = None
 
         self.G_params = list(filter(lambda p: p.requires_grad, self.G.parameters()))
-        
+
         if self.config.use_vae and hasattr(self, 'vae') and getattr(self.config, "train_encoder", True):
             vae_encoder_params = list(filter(lambda p: p.requires_grad, self.vae.encoder.parameters()))
             if vae_encoder_params:
@@ -465,31 +465,31 @@ class BaseTrainer:
         bsz = zs[0].shape[0]
         for i, (z, z_pred) in enumerate(zip(zs, zs_pred )):
             for j, (z_j, z_pred_j) in enumerate(zip(z, z_pred)):
-                z_pred_j = torch.nn.functional.normalize(z_pred_j, dim=-1) 
+                z_pred_j = torch.nn.functional.normalize(z_pred_j, dim=-1)
                 z_j = torch.nn.functional.normalize(z_j, dim=-1)[:z_pred_j.shape[0], :]
                 proj_loss += mean_flat(-(z_j * z_pred_j).sum(dim=-1))
         proj_loss /= (len(zs) * bsz)
-        
+
         return proj_loss
 
     def relativistic_discriminator_loss(self, real_logits, fake_logits):
         r_real = real_logits - torch.mean(fake_logits, dim=0, keepdim=True)
         r_fake = fake_logits - torch.mean(real_logits, dim=0, keepdim=True)
-        
+
         loss_real = F.binary_cross_entropy_with_logits(r_real, torch.ones_like(r_real))
-        
+
         loss_fake = F.binary_cross_entropy_with_logits(r_fake, torch.zeros_like(r_fake))
-        
+
         return (loss_real + loss_fake) / 2
-    
+
     def relativistic_generator_loss(self, real_logits, fake_logits):
         r_real = real_logits - torch.mean(fake_logits, dim=0, keepdim=True)
         r_fake = fake_logits - torch.mean(real_logits, dim=0, keepdim=True)
-        
+
         loss_fake = F.binary_cross_entropy_with_logits(r_fake, torch.ones_like(r_fake))
-        
+
         loss_real = F.binary_cross_entropy_with_logits(r_real, torch.zeros_like(r_real))
-        
+
         return (loss_real + loss_fake) / 2
 
     def validate(self):
@@ -504,7 +504,7 @@ class BaseTrainer:
         total_loss = 0.0
         total_psnr = 0.0
         num_batches = 0
-        
+
         val_save_dir = os.path.join(self.config.output_dir, self.config.logging_dir, "val_images", f"{self.global_step:07}")
         if self.accelerator.is_main_process:
             os.makedirs(val_save_dir, exist_ok=True)
@@ -514,12 +514,12 @@ class BaseTrainer:
         with torch.no_grad():
             for i, batch in enumerate(pbar_val):
                 self.prepare_batch_inputs(batch, transform=self.val_batch_transform)
-                
+
                 if self.config.use_repa:
                     x, _, _ = self.forward_generator()
                 else:
                     x, _ = self.forward_generator()
-                
+
                 pred_img = (x + 1) / 2
                 gt_img = (self.batch_inputs.gt + 1) / 2
                 loss = F.mse_loss(x, self.batch_inputs.gt)
@@ -531,10 +531,10 @@ class BaseTrainer:
 
                 if self.accelerator.is_main_process and i < 204:
                     vis_imgs = torch.cat([gt_img, pred_img], dim=3)
-                    
+
                     image_arrs = (vis_imgs * 255.0).clamp(0, 255).to(torch.uint8) \
                         .permute(0, 2, 3, 1).contiguous().cpu().numpy()
-                    
+
                     for j, img in enumerate(image_arrs):
                         file_name = f"batch{i}_sample{j}_gt_vs_pred.png"
                         Image.fromarray(img).save(os.path.join(val_save_dir, file_name))
@@ -545,13 +545,13 @@ class BaseTrainer:
 
         avg_loss = torch.tensor(total_loss / num_batches, device=self.device)
         avg_psnr = torch.tensor(total_psnr / num_batches, device=self.device)
-        
+
         if self.accelerator.num_processes > 1:
             avg_loss = self.accelerator.gather(avg_loss).mean()
             avg_psnr = self.accelerator.gather(avg_psnr).mean()
 
         logger.info(f"Validation Step {self.global_step}: Loss={avg_loss.item():.4f}, PSNR={avg_psnr.item():.4f}")
-        
+
         self.accelerator.log({
             "val/loss": avg_loss.item(),
             "val/psnr": avg_psnr.item()
@@ -651,7 +651,7 @@ class BaseTrainer:
                 _, fake_logits = D_unwrapped(x, for_G=True, verbose=False, return_logits=True)
                 with torch.no_grad():
                     _, real_logits = D_unwrapped(self.batch_inputs.gt, for_real=True, return_logits=True)
-                
+
                 loss_disc = 0.0
                 for r, f in zip(real_logits, fake_logits):
                     loss_disc = loss_disc + self.relativistic_generator_loss(r, f)
@@ -690,9 +690,9 @@ class BaseTrainer:
             loss_D = 0.0
             for r, f in zip(real_logits, fake_logits):
                 loss_D = loss_D + self.relativistic_discriminator_loss(r, f)
-            
 
-            if self.config.use_r1:    
+
+            if self.config.use_r1:
                 lambda_r1 = getattr(self.config, "lambda_r1", 1000.0)
                 r1_sigma = getattr(self.config, "r1_sigma", 0.01)
                 noise = torch.rand_like(gt, device=gt.device, dtype=gt.dtype) * r1_sigma
@@ -732,7 +732,7 @@ class BaseTrainer:
         self.on_training_start()
         self.batch_count = 0
         val_interval = getattr(self.config, "validation_steps", 10000)
-        
+
         while self.global_step < self.config.max_train_steps:
             train_loss = {}
             for batch in self.dataloader:
@@ -856,11 +856,11 @@ class BaseTrainer:
             gt_float = self.batch_inputs.gt.float()
             loss_l2 = F.mse_loss(x_float, gt_float, reduction="mean") * self.config.lambda_l2
             loss_lpips = self.net_lpips(x_float, gt_float).mean() * self.config.lambda_lpips
-            
+
             if hasattr(self, "D") and self.D is not None:
                 with torch.no_grad():
                     _, real_logits = self.D(gt_float, for_real=True, return_logits=True)
-                
+
                 _, fake_logits = self.D(x_float, for_real=False, return_logits=True)
 
                 loss_disc = 0.0
@@ -869,7 +869,7 @@ class BaseTrainer:
                         loss_disc = loss_disc + self.relativistic_generator_loss(r, f)
                 else:
                     loss_disc = self.relativistic_generator_loss(real_logits, fake_logits)
-                
+
                 loss_disc = loss_disc * self.config.lambda_gan
             else:
                 loss_disc = torch.zeros((), device=self.device, dtype=x_float.dtype)
@@ -944,12 +944,12 @@ class BaseTrainer:
 
             if self.config.use_vae and hasattr(self, 'vae') and getattr(self.config, "train_encoder", True):
                 vae_encoder_state_dict = self.unwrap_model(self.vae).encoder.state_dict()
-                
+
                 torch.save(vae_encoder_state_dict, os.path.join(save_path, "vae_encoder.pth"))
                 logger.info(f"Saved fine-tuned VAE encoder weights to {save_path}/vae_encoder.pth")
             if self.config.use_vae and hasattr(self, 'vae') and self.config.train_decoder:
                 vae_decoder_state_dict = self.unwrap_model(self.vae).decoder.state_dict()
-                
+
                 torch.save(vae_decoder_state_dict, os.path.join(save_path, "vae_decoder.pth"))
                 logger.info(f"Saved fine-tuned VAE decoder weights to {save_path}/vae_decoder.pth")
             self.ema_handler.save_ema_weights(save_path)

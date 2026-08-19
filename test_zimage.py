@@ -93,7 +93,7 @@ class ZImageValInfer:
             subfolder="vae",
             torch_dtype=self.weight_dtype,
         ).to(self.device)
-        self.vae.eval().requires_grad_(False)   
+        self.vae.eval().requires_grad_(False)
 
     def _init_generator(self):
         self.G = ZImageTransformer2DModel.from_pretrained(
@@ -117,17 +117,17 @@ class ZImageValInfer:
 
     def _init_qwen(self):
         model_path = self.qwen_model_path
-        
+
         self.qwen_model = Qwen3VLForConditionalGeneration.from_pretrained(
-            model_path, 
+            model_path,
             torch_dtype=self.weight_dtype,
             device_map=self.device,
             attn_implementation="flash_attention_2"
         ).eval()
         self.qwen_model.requires_grad_(False)
-        
+
         self.qwen_processor = AutoProcessor.from_pretrained(model_path)
-        
+
         self.image_token_id = self.qwen_model.config.image_token_id
         self.qwen_hidden_size = self.qwen_model.config.text_config.hidden_size
 
@@ -145,7 +145,7 @@ class ZImageValInfer:
             torch.nn.SiLU(),
             torch.nn.Linear(target_dim // 2, target_dim),
         ).to(self.device, dtype=self.weight_dtype)
-        
+
         projector_file = os.path.join(self.weight_path, "projector.pth")
         state_dict = torch.load(projector_file, map_location="cpu")
 
@@ -253,9 +253,9 @@ class ZImageValInfer:
     def extract_qwen_feature(self, lq, prompts):
         batch_size = len(prompts)
         lq_images_denorm = (lq * 255).clamp(0, 255).to(torch.uint8).permute(0, 2, 3, 1).cpu().numpy()
-        
+
         from PIL import Image
-        
+
         messages_batch = []
         for i in range(batch_size):
             img_pil = Image.fromarray(lq_images_denorm[i])
@@ -264,7 +264,7 @@ class ZImageValInfer:
                     "role": "user",
                     "content": [
                         {"type": "image", "image": img_pil},
-                        {"type": "text", "text": prompts[i]}, 
+                        {"type": "text", "text": prompts[i]},
                     ],
                 }
             ]
@@ -275,7 +275,7 @@ class ZImageValInfer:
             for msg in messages_batch
         ]
         image_inputs, video_inputs = process_vision_info(messages_batch)
-        
+
         inputs = self.qwen_processor(
             text=texts,
             images=image_inputs,
@@ -288,7 +288,7 @@ class ZImageValInfer:
         with torch.no_grad():
             outputs = self.qwen_model.model(**inputs, output_hidden_states=True)
             last_hidden_state = outputs.last_hidden_state
-        
+
         text_embeds_list = []
 
         for i in range(batch_size):
@@ -303,7 +303,7 @@ class ZImageValInfer:
             text_embeds_list.append(proj_text_tokens)
 
         return text_embeds_list
-    
+
     def forward_generator(self, z_lq: torch.Tensor):
         t_expand = torch.full((z_lq.shape[0],), self.model_t, dtype=torch.long, device=self.device)
         t_expand = (1000 - t_expand) / 1000
@@ -325,7 +325,7 @@ class ZImageValInfer:
         with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=(self.weight_dtype == torch.bfloat16 and self.device.type == "cuda")):
             image = self.vae.decode(latents, return_dict=False)[0]
         return image
-        
+
 
 def load_image_as_tensor(path: str) -> torch.Tensor:
     """Load an RGB image and return tensor of shape [1, 3, H, W] in [0,1]."""

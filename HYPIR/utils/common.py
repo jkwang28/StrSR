@@ -109,11 +109,11 @@ def sliding_windows(h: int, w: int, tile_size: int, tile_stride: int) -> Tuple[i
     hi_list = list(range(0, h - tile_size + 1, tile_stride))
     if (h - tile_size) % tile_stride != 0:
         hi_list.append(h - tile_size)
-    
+
     wi_list = list(range(0, w - tile_size + 1, tile_stride))
     if (w - tile_size) % tile_stride != 0:
         wi_list.append(w - tile_size)
-    
+
     coords = []
     for hi in hi_list:
         for wi in wi_list:

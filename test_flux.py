@@ -93,7 +93,7 @@ class FluxValInfer:
             subfolder="vae",
             torch_dtype=self.weight_dtype,
         ).to(self.device)
-        self.vae.eval().requires_grad_(False)   
+        self.vae.eval().requires_grad_(False)
 
     def _init_generator(self):
         self.G = Flux2Transformer2DModel.from_pretrained(
@@ -131,17 +131,17 @@ class FluxValInfer:
 
     def _init_qwen(self):
         model_path = self.qwen_model_path
-        
+
         self.qwen_model = Qwen3VLForConditionalGeneration.from_pretrained(
-            model_path, 
-            torch_dtype=self.weight_dtype, 
+            model_path,
+            torch_dtype=self.weight_dtype,
             device_map=self.device,
             attn_implementation="flash_attention_2"
         ).eval()
         self.qwen_model.requires_grad_(False)
-        
+
         self.qwen_processor = AutoProcessor.from_pretrained(model_path)
-        
+
         self.image_token_id = self.qwen_model.config.image_token_id
         self.qwen_hidden_size = self.qwen_model.config.text_config.hidden_size
 
@@ -170,7 +170,7 @@ class FluxValInfer:
             torch.nn.SiLU(),
             torch.nn.Linear(target_dim // 2, target_dim),
         ).to(self.device, dtype=self.weight_dtype)
-        
+
         projector_file = os.path.join(self.weight_path, "projector.pth")
         state_dict = torch.load(projector_file, map_location="cpu")
 
@@ -312,7 +312,7 @@ class FluxValInfer:
             latents.device, latents.dtype
         )
         return latents * bn_std + bn_mean
-    
+
     def extract_qwen_feature(self, lq, prompts):
         batch_size = len(prompts)
         lq_images = (lq * 255).clamp(0, 255).to(torch.uint8).permute(0, 2, 3, 1).cpu().numpy()
@@ -345,7 +345,7 @@ class FluxValInfer:
 
         text_embeds = torch.nn.utils.rnn.pad_sequence(text_embeds_list, batch_first=True)
         return text_embeds, self._prepare_text_ids(text_embeds)
-    
+
     def _denoise_step(self, packed_latents, timesteps, height, width):
         text_embeds = self.c_txt["text_embeds"].to(device=self.device, dtype=self.weight_dtype)
         txt_ids = self.c_txt["text_ids"].to(device=self.device, dtype=self.weight_dtype)
@@ -364,7 +364,7 @@ class FluxValInfer:
             joint_attention_kwargs=None,
             return_dict=False,
         )[0]
-    
+
     def forward_generator(self, z_lq: torch.Tensor):
         timesteps = torch.full((z_lq.shape[0],), self.model_t, dtype=torch.long, device=self.device)
         sigmas = torch.tensor([self.coeff_t / 1000.0, 0], dtype=torch.float32, device=self.device)
@@ -382,7 +382,7 @@ class FluxValInfer:
         latents = self._denormalize_flux2_latents(latents)
         latents = self._unpatchify_latents(latents)
         return self.vae.decode(latents.to(dtype=self.weight_dtype), return_dict=False)[0]
-        
+
 
 def load_image_as_tensor(path: str) -> torch.Tensor:
     """Load an RGB image and return tensor of shape [1, 3, H, W] in [0,1]."""
