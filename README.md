@@ -2,7 +2,7 @@
   <img src="assets/images/logo.png" alt="StrSR" width="300">
 </p>
 
-# [ECCV 2026] Spectral and Trajectory Regularization for Diffusion Transformer Super-Resolution
+# [ECCV 2026] [Spectral and Trajectory Regularization for Diffusion Transformer Super-Resolution](https://eccv.ecva.net/virtual/2026/poster/5583)
 
 &#8224;Equal Contribution, \*Corresponding Authors
 
