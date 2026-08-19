@@ -162,6 +162,7 @@ def make_tiled_fn(
     progress: bool = True,
     desc: str=None,
 ) -> Callable[[torch.Tensor], torch.Tensor]:
+    # Tile only x; pass other arguments through with the current tile index.
     def tiled_fn(x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         if scale_type == "up":
             scale_fn = lambda n: int(n * scale)

@@ -111,6 +111,7 @@ def load_file_meta(file_meta: Dict[str, str]) -> List[Dict[str, str]]:
                         if max_count is not None and added >= max_count:
                             break
             else:
+                # Reservoir sampling avoids loading the entire file into memory.
                 k = max_count
                 reservoir = []
                 seen = 0
@@ -160,8 +161,9 @@ def load_file_meta(file_meta: Dict[str, str]) -> List[Dict[str, str]]:
                         if max_count is not None and added >= max_count:
                             break
             else:
+                # Apply reservoir sampling to parsed rows as well.
                 k = max_count
-                reservoir = []
+                reservoir = []  # list of (image_rel_path, prompt)
                 seen = 0
                 with open(file_list_path, "r") as fp:
                     for line in fp:
@@ -247,6 +249,9 @@ def random_crop_arr(pil_image, image_size, min_crop_frac=0.8, max_crop_frac=1.0)
     max_smaller_dim_size = math.ceil(image_size / min_crop_frac)
     smaller_dim_size = random.randrange(min_smaller_dim_size, max_smaller_dim_size + 1)
 
+    # We are not on a new enough PIL to support the `reducing_gap`
+    # argument, which uses BOX downsampling at powers of two first.
+    # Thus, we do it by hand to improve downsample quality.
     while min(*pil_image.size) >= 2 * smaller_dim_size:
         pil_image = pil_image.resize(
             tuple(x // 2 for x in pil_image.size), resample=Image.BOX
@@ -291,19 +296,19 @@ def augment(imgs, hflip=True, rotation=True, flows=None, return_status=False):
     rot90 = rotation and random.random() < 0.5
 
     def _augment(img):
-        if hflip:
+        if hflip:  # horizontal
             cv2.flip(img, 1, img)
-        if vflip:
+        if vflip:  # vertical
             cv2.flip(img, 0, img)
         if rot90:
             img = img.transpose(1, 0, 2)
         return img
 
     def _augment_flow(flow):
-        if hflip:
+        if hflip:  # horizontal
             cv2.flip(flow, 1, flow)
             flow[:, :, 0] *= -1
-        if vflip:
+        if vflip:  # vertical
             cv2.flip(flow, 0, flow)
             flow[:, :, 1] *= -1
         if rot90:
@@ -349,10 +354,12 @@ def filter2D(img, kernel):
     ph, pw = img.size()[-2:]
 
     if kernel.size(0) == 1:
+        # apply the same kernel to all batch images
         img = img.view(b * c, 1, ph, pw)
         kernel = kernel.view(1, 1, k, k)
         return F.conv2d(img, kernel, padding=0).view(b, c, h, w)
     else:
+        # img: torch.Tensor
         img = img.view(1, b * c, ph, pw)
         kernel = kernel.view(b, 1, k, k).repeat(1, c, 1, 1).view(b * c, 1, k, k)
         return F.conv2d(img, kernel, groups=b * c).view(b, c, h, w)

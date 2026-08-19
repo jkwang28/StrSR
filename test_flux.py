@@ -201,6 +201,7 @@ class FluxValInfer:
         if self.conditioning == "qwen":
             if lq is None:
                 raise ValueError("FLUX Qwen conditioning requires the original low-resolution LQ image.")
+            # Qwen sees the original LR image; the VAE/DiT path is upscaled separately.
             raw_lq = lq.float().to(self.device).clamp(0, 1)
             text_embeds, text_ids = self.extract_qwen_feature(raw_lq, prompts)
         elif self.conditioning == "txt":
@@ -420,8 +421,8 @@ def make_feather_mask(tile_h: int, tile_w: int, overlap: int, device: torch.devi
 
     wy = _hann(tile_h)
     wx = _hann(tile_w)
-    mask = torch.outer(wy, wx)
-    mask = mask.unsqueeze(0).unsqueeze(0)
+    mask = torch.outer(wy, wx)  # [height, width]
+    mask = mask.unsqueeze(0).unsqueeze(0)  # [1, 1, height, width]
     return mask
 
 
@@ -429,6 +430,7 @@ def tile_coords(H: int, W: int, tile: int, overlap: int) -> Tuple[Tuple[int, int
     stride = max(1, tile - overlap)
     ys = list(range(0, max(1, H - tile + 1), stride))
     xs = list(range(0, max(1, W - tile + 1), stride))
+    # The regular stride may not land exactly on the bottom or right edge.
     last_y = max(0, H - tile)
     last_x = max(0, W - tile)
     if ys[-1] != last_y:
@@ -452,6 +454,7 @@ def infer_tiled(
     if orig_H <= 0 or orig_W <= 0:
         raise ValueError("Invalid image size")
 
+    # VAE 8x downsampling and DiT 2x patches require a multiple of 16.
     pad_h = (-orig_H) % 16
     pad_w = (-orig_W) % 16
     if pad_h or pad_w:
@@ -509,6 +512,7 @@ def infer_tiled(
     out = out.clamp(-1, 1)
     out = (out + 1.0) / 2.0
 
+    # Remove alignment padding before returning the result.
     out = out[:, :, :orig_H, :orig_W]
     return out
 
@@ -679,6 +683,7 @@ def main():
         try:
             img_lq = load_image_as_tensor(lq_path)
             img_hr = bicubic_upscale(img_lq, scale_factor=args.bicubic_scale)
+            # VAE/DiT receives the upscaled input; Qwen receives the raw LR image.
             out_t = infer_tiled(
                 img_hr,
                 model,

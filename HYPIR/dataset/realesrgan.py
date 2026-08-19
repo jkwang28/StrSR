@@ -28,6 +28,7 @@ class RealESRGANDataset(data.Dataset):
         crop_type,
         use_hflip,
         use_rot,
+        # blur kernel settings of the first degradation stage
         blur_kernel_size,
         kernel_list,
         kernel_prob,
@@ -35,6 +36,7 @@ class RealESRGANDataset(data.Dataset):
         betag_range,
         betap_range,
         sinc_prob,
+        # blur kernel settings of the second degradation stage
         blur_kernel_size2,
         kernel_list2,
         kernel_prob2,
@@ -70,18 +72,23 @@ class RealESRGANDataset(data.Dataset):
         self.betap_range2 = betap_range2
         self.sinc_prob2 = sinc_prob2
 
+        # a final sinc filter
         self.final_sinc_prob = final_sinc_prob
 
         self.use_hflip = use_hflip
         self.use_rot = use_rot
 
+        # kernel size ranges from 7 to 21
         self.kernel_range = [2 * v + 1 for v in range(3, 11)]
+        # TODO: kernel range is now hard-coded, should be in the configure file
+        # convolving with pulse tensor brings no blurry effect
         self.pulse_tensor = torch.zeros(21, 21).float()
         self.pulse_tensor[10, 10] = 1
 
         self.p_empty_prompt = p_empty_prompt
         self.return_file_name = return_file_name
 
+        # Permit images up to 2**28 pixels without a decompression-bomb warning.
         Image.MAX_IMAGE_PIXELS = 268435456
 
     def load_gt_image(self, image_path: str, max_retry: int = 5) -> Optional[np.ndarray]:
@@ -92,7 +99,7 @@ class RealESRGANDataset(data.Dataset):
             try:
                 image_bytes = self.file_backend.get(image_path)
             except OSError:
-                return None
+                return None # file does not exist
             max_retry -= 1
             if image_bytes is None:
                 time.sleep(0.5)
@@ -100,7 +107,7 @@ class RealESRGANDataset(data.Dataset):
         try:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         except (OSError, ValueError):
-            return None
+            return None # failed to decode image bytes
 
         if self.crop_type != "none":
             if image.height == self.out_size and image.width == self.out_size:
@@ -116,12 +123,15 @@ class RealESRGANDataset(data.Dataset):
                     "Using uncropped image with size %dx%d", image.width, image.height
                 )
             image = np.array(image)
-        return image
+        return image  # HWC, RGB, uint8 in [0, 255]
 
     @torch.no_grad()
     def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
+        # -------------------------------- Load hq images -------------------------------- #
+        # load gt image
         img_gt = None
         while img_gt is None:
+            # load meta file
             image_file = self.image_files[index]
             gt_path = image_file["image_path"]
             prompt = image_file["prompt"]
@@ -137,16 +147,20 @@ class RealESRGANDataset(data.Dataset):
                 logger.warning("Failed to load %s; trying another image", gt_path)
                 index = random.randint(0, len(self) - 1)
 
+        # HWC RGB uint8 to HWC BGR float32 in [0, 1].
         img_hq = (img_gt[..., ::-1] / 255.0).astype(np.float32)
         if img_lq is not None:
             img_lq = (img_lq[..., ::-1] / 255.0).astype(np.float32)
         if np.random.uniform() < self.p_empty_prompt:
             prompt = ""
 
+        # -------------------- Do augmentation for training: flip, rotation -------------------- #
         img_hq = augment(img_hq, self.use_hflip, self.use_rot)
 
+        # ------------------------ Generate kernels (used in the first degradation) ------------------------ #
         kernel_size = random.choice(self.kernel_range)
         if np.random.uniform() < self.sinc_prob:
+            # this sinc filter setting is for kernels ranging from [7, 21]
             if kernel_size < 13:
                 omega_c = np.random.uniform(np.pi / 3, np.pi)
             else:
@@ -164,9 +178,11 @@ class RealESRGANDataset(data.Dataset):
                 self.betap_range,
                 noise_range=None,
             )
+        # Use a fixed 21x21 shape so kernels can be stacked into a batch.
         pad_size = (21 - kernel_size) // 2
         kernel = np.pad(kernel, ((pad_size, pad_size), (pad_size, pad_size)))
 
+        # ------------------------ Generate kernels (used in the second degradation) ------------------------ #
         kernel_size = random.choice(self.kernel_range)
         if np.random.uniform() < self.sinc_prob2:
             if kernel_size < 13:
@@ -187,9 +203,11 @@ class RealESRGANDataset(data.Dataset):
                 noise_range=None,
             )
 
+        # Use the same fixed shape as the first-stage kernel.
         pad_size = (21 - kernel_size) // 2
         kernel2 = np.pad(kernel2, ((pad_size, pad_size), (pad_size, pad_size)))
 
+        # ------------------------------------- the final sinc kernel ------------------------------------- #
         if np.random.uniform() < self.final_sinc_prob:
             kernel_size = random.choice(self.kernel_range)
             omega_c = np.random.uniform(np.pi / 3, np.pi)
@@ -198,6 +216,7 @@ class RealESRGANDataset(data.Dataset):
         else:
             sinc_kernel = self.pulse_tensor
 
+        # [0, 1], BGR to RGB, HWC to CHW
         img_hq = torch.from_numpy(img_hq[..., ::-1].transpose(2, 0, 1).copy()).float()
         if img_lq is not None:
             img_lq = torch.from_numpy(img_lq[..., ::-1].transpose(2, 0, 1).copy()).float()
@@ -214,6 +233,7 @@ class RealESRGANDataset(data.Dataset):
         if img_lq is not None:
             data["lq"] = img_lq
         if self.return_file_name:
+            # Prefer returning path relative to image_path_prefix to avoid basename collisions
             prefix = None
             try:
                 prefix = self.file_meta.get("image_path_prefix", None)

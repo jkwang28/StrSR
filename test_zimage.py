@@ -287,7 +287,7 @@ class ZImageValInfer:
 
         with torch.no_grad():
             outputs = self.qwen_model.model(**inputs, output_hidden_states=True)
-            last_hidden_state = outputs.last_hidden_state
+            last_hidden_state = outputs.last_hidden_state  # [batch, sequence, hidden]
 
         text_embeds_list = []
 
@@ -297,7 +297,7 @@ class ZImageValInfer:
 
             text_mask = (attn_mask == 1) & (input_ids != self.image_token_id)
 
-            text_tokens = last_hidden_state[i][text_mask]
+            text_tokens = last_hidden_state[i][text_mask]  # [text tokens, hidden]
             text_tokens = text_tokens.to(dtype=self.weight_dtype)
             proj_text_tokens = self.projector(text_tokens)
             text_embeds_list.append(proj_text_tokens)
@@ -363,8 +363,8 @@ def make_feather_mask(tile_h: int, tile_w: int, overlap: int, device: torch.devi
 
     wy = _hann(tile_h)
     wx = _hann(tile_w)
-    mask = torch.outer(wy, wx)
-    mask = mask.unsqueeze(0).unsqueeze(0)
+    mask = torch.outer(wy, wx)  # [H, W]
+    mask = mask.unsqueeze(0).unsqueeze(0)  # [1,1,H,W]
     return mask
 
 
@@ -372,6 +372,7 @@ def tile_coords(H: int, W: int, tile: int, overlap: int) -> Tuple[Tuple[int, int
     stride = max(1, tile - overlap)
     ys = list(range(0, max(1, H - tile + 1), stride))
     xs = list(range(0, max(1, W - tile + 1), stride))
+    # The regular stride may not land exactly on the bottom or right edge.
     last_y = max(0, H - tile)
     last_x = max(0, W - tile)
     if ys[-1] != last_y:
@@ -395,6 +396,7 @@ def infer_tiled(
     if orig_H <= 0 or orig_W <= 0:
         raise ValueError("Invalid image size")
 
+    # Pad once so all patches respect DiT/VAE alignment (16 = VAE 8x * patch 2x)
     pad_h = (-orig_H) % 16
     pad_w = (-orig_W) % 16
     if pad_h or pad_w:
@@ -451,6 +453,7 @@ def infer_tiled(
     out = out.clamp(-1, 1)
     out = (out + 1.0) / 2.0
 
+    # Crop back to original size if we padded
     out = out[:, :, :orig_H, :orig_W]
     return out
 
@@ -605,6 +608,7 @@ def main():
         try:
             img_lq = load_image_as_tensor(lq_path)
             img_hr = bicubic_upscale(img_lq, scale_factor=args.bicubic_scale)
+            # VAE/DiT receives the upscaled input; Qwen receives the raw LR image.
             out_t = infer_tiled(
                 img_hr,
                 model,

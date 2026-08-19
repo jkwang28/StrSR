@@ -55,9 +55,11 @@ class RealESRGANBatchTransform(BatchTransform):
         self.hq_key = hq_key
         self.extra_keys = extra_keys
 
+        # resize settings for the first degradation process
         self.resize_prob = resize_prob
         self.resize_range = resize_range
 
+        # noise settings for the first degradation process
         self.gray_noise_prob = gray_noise_prob
         self.gaussian_noise_prob = gaussian_noise_prob
         self.noise_range = noise_range
@@ -67,9 +69,11 @@ class RealESRGANBatchTransform(BatchTransform):
         self.second_blur_prob = second_blur_prob
         self.stage2_scale = stage2_scale
 
+        # resize settings for the second degradation process
         self.resize_prob2 = resize_prob2
         self.resize_range2 = resize_range2
 
+        # noise settings for the second degradation process
         self.gray_noise_prob2 = gray_noise_prob2
         self.gaussian_noise_prob2 = gaussian_noise_prob2
         self.noise_range2 = noise_range2
@@ -118,13 +122,17 @@ class RealESRGANBatchTransform(BatchTransform):
 
         results = {}
         if self.queue_ptr == self.queue_size:
+            # The queue is full, do dequeue and enqueue
             idx = torch.randperm(self.queue_size)
             for k, q in self.queue.items():
                 v = values[k]
                 b = len(v)
                 if isinstance(q, torch.Tensor):
+                    # Shuffle the queue
                     q_shuf = q[idx]
+                    # Get front samples
                     results[k] = q_shuf[0:b, ...].clone()
+                    # Update front samples
                     q_shuf[0:b, ...] = v.clone()
                     self.queue[k] = q_shuf
                 else:
@@ -134,6 +142,7 @@ class RealESRGANBatchTransform(BatchTransform):
                         q_shuf[i] = v[i]
                     self.queue[k] = q_shuf
         else:
+            # Only do enqueue
             for k, q in self.queue.items():
                 v = values[k]
                 b = len(v)
@@ -161,7 +170,10 @@ class RealESRGANBatchTransform(BatchTransform):
 
         ori_h, ori_w = hq.size()[2:4]
 
+        # ----------------------- The first degradation process ----------------------- #
+        # blur
         out = filter2D(hq, kernel1)
+        # random resize
         updown_type = random.choices(["up", "down", "keep"], self.resize_prob)[0]
         if updown_type == "up":
             scale = np.random.uniform(1, self.resize_range[1])
@@ -171,6 +183,7 @@ class RealESRGANBatchTransform(BatchTransform):
             scale = 1
         mode = random.choice(["area", "bilinear", "bicubic"])
         out = F.interpolate(out, scale_factor=scale, mode=mode)
+        # add noise
         if np.random.uniform() < self.gaussian_noise_prob:
             out = random_add_gaussian_noise_pt(
                 out,
@@ -187,13 +200,18 @@ class RealESRGANBatchTransform(BatchTransform):
                 clip=True,
                 rounds=False,
             )
+        # JPEG compression
         jpeg_p = out.new_zeros(out.size(0)).uniform_(*self.jpeg_range)
+        # clamp to [0, 1], otherwise JPEGer will result in unpleasant artifacts
         out = torch.clamp(out, 0, 1)
         out = self.jpeger(out, quality=jpeg_p)
 
+        # ----------------------- The second degradation process ----------------------- #
+        # blur
         if np.random.uniform() < self.second_blur_prob:
             out = filter2D(out, kernel2)
 
+        # select scale of second degradation stage
         if isinstance(self.stage2_scale, Sequence):
             min_scale, max_scale = self.stage2_scale
             stage2_scale = np.random.uniform(min_scale, max_scale)
@@ -201,6 +219,7 @@ class RealESRGANBatchTransform(BatchTransform):
             stage2_scale = self.stage2_scale
         stage2_h, stage2_w = int(ori_h / stage2_scale), int(ori_w / stage2_scale)
 
+        # random resize
         updown_type = random.choices(["up", "down", "keep"], self.resize_prob2)[0]
         if updown_type == "up":
             scale = np.random.uniform(1, self.resize_range2[1])
@@ -210,6 +229,7 @@ class RealESRGANBatchTransform(BatchTransform):
             scale = 1
         mode = random.choice(["area", "bilinear", "bicubic"])
         out = F.interpolate(out, size=(int(stage2_h * scale), int(stage2_w * scale)), mode=mode)
+        # add noise
         if np.random.uniform() < self.gaussian_noise_prob2:
             out = random_add_gaussian_noise_pt(
                 out,
@@ -227,30 +247,44 @@ class RealESRGANBatchTransform(BatchTransform):
                 rounds=False,
             )
 
+        # JPEG compression + the final sinc filter
+        # We also need to resize images to desired sizes. We group [resize back + sinc filter] together
+        # as one operation.
+        # We consider two orders:
+        #   1. [resize back + sinc filter] + JPEG compression
+        #   2. JPEG compression + [resize back + sinc filter]
+        # Empirically, we find other combinations (sinc + JPEG + Resize) will introduce twisted lines.
         if np.random.uniform() < 0.5:
+            # resize back + the final sinc filter
             mode = random.choice(["area", "bilinear", "bicubic"])
             out = F.interpolate(out, size=(stage2_h, stage2_w), mode=mode)
             out = filter2D(out, sinc_kernel)
+            # JPEG compression
             jpeg_p = out.new_zeros(out.size(0)).uniform_(*self.jpeg_range2)
             out = torch.clamp(out, 0, 1)
             out = self.jpeger(out, quality=jpeg_p)
         else:
+            # JPEG compression
             jpeg_p = out.new_zeros(out.size(0)).uniform_(*self.jpeg_range2)
             out = torch.clamp(out, 0, 1)
             out = self.jpeger(out, quality=jpeg_p)
+            # resize back + the final sinc filter
             mode = random.choice(["area", "bilinear", "bicubic"])
             out = F.interpolate(out, size=(stage2_h, stage2_w), mode=mode)
             out = filter2D(out, sinc_kernel)
 
         origin_lq = out
+        # resize back to gt_size since We are doing restoration task
         if stage2_scale != 1 and self.resize_back:
             out = F.interpolate(out, size=(ori_h, ori_w), mode="bicubic")
+        # clamp and round
         lq = torch.clamp((out * 255.0).round(), 0, 255) / 255.0
 
         batch = {"GT": hq, "LQ": lq, "low_LQ": origin_lq, **{k: batch[k] for k in self.extra_keys}}
         if self.queue_size > 0:
             batch = self._dequeue_and_enqueue(batch)
         return batch
+
 
 class RealESRGANBatchTransformHQLQ(BatchTransform):
 
@@ -326,13 +360,17 @@ class RealESRGANBatchTransformHQLQ(BatchTransform):
 
         results = {}
         if self.queue_ptr == self.queue_size:
+            # The queue is full, do dequeue and enqueue
             idx = torch.randperm(self.queue_size)
             for k, q in self.queue.items():
                 v = values[k]
                 b = len(v)
                 if isinstance(q, torch.Tensor):
+                    # Shuffle the queue
                     q_shuf = q[idx]
+                    # Get front samples
                     results[k] = q_shuf[0:b, ...].clone()
+                    # Update front samples
                     q_shuf[0:b, ...] = v.clone()
                     self.queue[k] = q_shuf
                 else:
@@ -342,6 +380,7 @@ class RealESRGANBatchTransformHQLQ(BatchTransform):
                         q_shuf[i] = v[i]
                     self.queue[k] = q_shuf
         else:
+            # Only do enqueue
             for k, q in self.queue.items():
                 v = values[k]
                 b = len(v)

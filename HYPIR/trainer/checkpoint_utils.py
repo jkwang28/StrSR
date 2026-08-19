@@ -60,6 +60,8 @@ def load_trainable_state_dict(model, path):
             f"Minimal checkpoint key mismatch in {path}; " + "; ".join(problems)
         )
 
+    # Frozen base-model keys are intentionally absent; every trainable key was
+    # validated above, so strict=False only permits those frozen missing keys.
     return model.load_state_dict(state_dict, strict=False)
 
 

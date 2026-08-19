@@ -80,6 +80,8 @@ def load_trainable_weights(
             + "; ".join(problems)
         )
 
+    # Minimal checkpoints omit frozen base-model keys. Merge them from the
+    # already-loaded base model so the final load can still be strict.
     complete_state_dict = model.state_dict()
     complete_state_dict.update(state_dict)
     try:

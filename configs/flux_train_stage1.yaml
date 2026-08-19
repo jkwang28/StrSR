@@ -47,8 +47,10 @@ data_config:
         hq_key: hq
         extra_keys: [txt]
         use_sharpener: true
+        # Queue size of training pool, this should be multiples of batch_size (per GPU).
         queue_size: 256
-        resize_prob: [0.2, 0.7, 0.1]
+        # First degradation stage.
+        resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
         resize_range: [0.15, 1.5]
         gaussian_noise_prob: 0.5
         noise_range: [1, 30]
@@ -56,9 +58,10 @@ data_config:
         gray_noise_prob: 0.4
         jpeg_range: [30, 95]
 
+        # Second degradation stage.
         stage2_scale: 4
         second_blur_prob: 0.8
-        resize_prob2: [0.3, 0.4, 0.3]
+        resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
         resize_range2: [0.3, 1.2]
         gaussian_noise_prob2: 0.5
         noise_range2: [1, 25]

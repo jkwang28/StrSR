@@ -211,6 +211,8 @@ class ZImageVLMTrainer(BaseTrainer):
             logger.warning("LoRA modules list is empty; generator will remain frozen.")
 
         self._set_byt5_precision(self.weight_dtype)
+        # Keep training mode for gradient checkpointing; train() does not alter
+        # the existing requires_grad mask.
         self.G.train()
 
     def init_discriminator(self):
@@ -381,8 +383,7 @@ class ZImageVLMTrainer(BaseTrainer):
 
         with torch.no_grad():
             outputs = self.qwen_model.model(**inputs, output_hidden_states=True)
-            last_hidden_state = outputs.last_hidden_state
-
+            last_hidden_state = outputs.last_hidden_state  # [batch, sequence, hidden]
 
         visual_embeds_list, text_embeds_list = [], []
 
@@ -393,12 +394,11 @@ class ZImageVLMTrainer(BaseTrainer):
             image_mask = input_ids == self.image_token_id
             text_mask = (attn_mask == 1) & (input_ids != self.image_token_id)
 
-
-            vis_tokens = last_hidden_state[i][image_mask]
+            vis_tokens = last_hidden_state[i][image_mask]  # [visual tokens, hidden]
             vis_tokens = vis_tokens.to(dtype=self.weight_dtype)
             visual_embeds_list.append(vis_tokens)
 
-            text_tokens = last_hidden_state[i][text_mask]
+            text_tokens = last_hidden_state[i][text_mask]  # [text tokens, hidden]
             text_tokens = text_tokens.to(dtype=self.weight_dtype)
             proj_text_tokens = self.projector(text_tokens)
             text_embeds_list.append(proj_text_tokens)

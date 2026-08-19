@@ -11,14 +11,14 @@ import json
 import torch
 import torch.nn.functional as F
 import pyiqa
+# Torch 2.6 introduces safe serialization helpers; provide backward-compatible fallbacks for 2.5.x
 try:
     from torch.serialization import get_unsafe_globals_in_checkpoint, add_safe_globals
-except ImportError:
+except ImportError: # torch < 2.6.0
     def get_unsafe_globals_in_checkpoint(_path):
-        return []
-
+        return [] # In torch<=2.5, there is no safe-unpickling gate, so nothing to add.
     def add_safe_globals(_globals_list):
-        return None
+        return None # No-op on older torch versions.
 from torchvision.utils import make_grid
 from accelerate import Accelerator, DeepSpeedPlugin
 from accelerate.logging import get_logger
@@ -199,6 +199,7 @@ class BaseTrainer(ABC):
     def init_fdl(self):
         self.fdl_loss = None
         if getattr(self.config, "use_fdl", False):
+            # FDL initializes CUDA at import time, so import it after device selection.
             from FDL_pytorch import FDL_loss
 
             self.fdl_loss = FDL_loss().to(self.device)
@@ -334,6 +335,7 @@ class BaseTrainer(ABC):
             logger.info("DeepSpeed detected: preparing generator only with accelerator")
             self.G, self.G_opt = self.accelerator.prepare(self.G, self.G_opt)
             self.dataloader = self.accelerator.prepare_data_loader(self.dataloader)
+            # Prepare discriminator separately only when enabled
             if getattr(self.config, "use_D", False) and hasattr(self, "D") and self.D is not None:
                 self.D = self.D.to(self.device)
                 if self.accelerator.distributed_type != DistributedType.NO:
@@ -342,6 +344,7 @@ class BaseTrainer(ABC):
                         ddp_kwargs["device_ids"] = [self.accelerator.device.index]
                     self.D = torch.nn.parallel.DistributedDataParallel(self.D, **ddp_kwargs)
         else:
+            # Prepare only existing/required components when not using DeepSpeed
             attrs = ["G", "G_opt", "G_scheduler", "dataloader"]
             if getattr(self.config, "use_D", False) and hasattr(self, "D") and hasattr(self, "D_opt"):
                 attrs.extend(["D", "D_opt", "D_scheduler"])
@@ -374,6 +377,7 @@ class BaseTrainer(ABC):
     def on_training_start(self):
         self._save_config()
 
+        # Build ema state dict
         logger.info(f"Creating EMA handler, Use EMA = {self.config.use_ema}, EMA decay = {self.config.ema_decay}")
         if self.config.resume_from_checkpoint is not None and self.config.resume_ema:
             ema_resume_pth = os.path.join(self.config.resume_from_checkpoint, "ema_state_dict.pth")
@@ -394,9 +398,11 @@ class BaseTrainer(ABC):
             logger.info(f"Resuming from checkpoint {path}")
             accel_state_path = os.path.join(path, "model.safetensors")
             if os.path.exists(accel_state_path) and not getattr(self.config, "load_minimal_checkpoint", False):
+                # Full state exists (non-minimal): resume via accelerator
                 self.force_optimizer_ckpt_safe(path)
                 self.accelerator.load_state(path)
             else:
+                # Minimal checkpoint: load LoRA/trainable weights only
                 logger.info("Load LoRA/trainable weights only")
                 self._load_minimal_checkpoint(path)
             global_step = int(ckpt_name.split("-")[1])
@@ -534,8 +540,12 @@ class BaseTrainer(ABC):
                 total_psnr += psnr.item()
                 num_batches += 1
 
-                if self.accelerator.is_main_process and i < 204:
-                    vis_imgs = torch.cat([gt_img, pred_img], dim=3)
+                # Save images for the first few batches or specific interval
+                # Only save on main process to avoid write conflicts
+                if self.accelerator.is_main_process and i < 204: # Save first 5 batches
+                    # Concatenate GT and Pred for side-by-side comparison
+                    # x shape: [B, C, H, W]
+                    vis_imgs = torch.cat([gt_img, pred_img], dim=3) # Concat horizontally
 
                     image_arrs = (vis_imgs * 255.0).clamp(0, 255).to(torch.uint8) \
                         .permute(0, 2, 3, 1).contiguous().cpu().numpy()
@@ -564,10 +574,12 @@ class BaseTrainer(ABC):
 
     def optimize_generator_latent(self):
         ds_plugin = getattr(self.accelerator.state, "deepspeed_plugin", None)
+        # Avoid accelerate.accumulate (which uses no_sync) when ZeRO stage >= 2
         use_null_ctx = bool(ds_plugin and getattr(ds_plugin, "zero_stage", 0) >= 2)
         ctx = nullcontext() if use_null_ctx else self.accelerator.accumulate(self.G)
         grad_norm = torch.zeros((), device=self.device)
         with ctx:
+            # Discriminator is not used in latent-only optimization; guard access if exists
             if hasattr(self, "D") and self.D is not None:
                 self.unwrap_model(self.D).eval().requires_grad_(False)
             if self.config.use_repa:
@@ -575,6 +587,7 @@ class BaseTrainer(ABC):
                 zs = self.batch_inputs.z_s
             else:
                 latent = self.forward_generator()
+            # Compute MSE loss in float32 to avoid dtype mismatch with bf16 params/backward
             loss_l2 = F.mse_loss(latent.float(), self.batch_inputs.z_gt.float(), reduction="mean") * self.config.lambda_l2
             loss_G = loss_l2.float()
             if self.config.use_repa:
@@ -598,6 +611,7 @@ class BaseTrainer(ABC):
 
     def optimize_generator_image(self):
         ds_plugin = getattr(self.accelerator.state, "deepspeed_plugin", None)
+        # Avoid accelerate.accumulate (which uses no_sync) when ZeRO stage >= 2
         use_null_ctx = bool(ds_plugin and getattr(ds_plugin, "zero_stage", 0) >= 2)
         ctx = nullcontext() if use_null_ctx else self.accelerator.accumulate(self.G)
         norm_before_clip = torch.zeros((), device=self.device)
@@ -657,6 +671,7 @@ class BaseTrainer(ABC):
 
                 loss_disc = 0.0
                 for r, f in zip(real_logits, fake_logits):
+                    # RaGAN loss for Generator
                     loss_disc = loss_disc + self.relativistic_generator_loss(r, f)
                 loss_disc = loss_disc * self.config.lambda_gan
             else:

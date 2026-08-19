@@ -133,6 +133,8 @@ class FluxVLMTrainer(BaseTrainer):
         else:
             logger.warning("LoRA modules list is empty; generator remains frozen.")
 
+        # Keep training mode for gradient checkpointing; train() does not alter
+        # the existing requires_grad mask.
         self.G.train()
 
     def init_discriminator(self):
