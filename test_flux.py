@@ -48,7 +48,6 @@ def write_manifest(
         manifest_file.write("\n")
 
 
-# Simple inference helper reusing Flux trainer logic instead of enhancer.
 class FluxValInfer:
     def __init__(
         self,
@@ -94,7 +93,7 @@ class FluxValInfer:
             subfolder="vae",
             torch_dtype=self.weight_dtype,
         ).to(self.device)
-        self.vae.eval().requires_grad_(False)   
+        self.vae.eval().requires_grad_(False)
 
     def _init_generator(self):
         self.G = Flux2Transformer2DModel.from_pretrained(
@@ -117,7 +116,6 @@ class FluxValInfer:
             )
             self.G = get_peft_model(self.G, lora_cfg)
             self.G.to(self.device)
-        # keep eval mode for inference
         self.G.eval()
 
     def _resolve_lora_targets(self, model: torch.nn.Module, target_patterns: List[str]) -> List[str]:
@@ -133,17 +131,17 @@ class FluxValInfer:
 
     def _init_qwen(self):
         model_path = self.qwen_model_path
-        
+
         self.qwen_model = Qwen3VLForConditionalGeneration.from_pretrained(
-            model_path, 
-            torch_dtype=self.weight_dtype, 
+            model_path,
+            torch_dtype=self.weight_dtype,
             device_map=self.device,
             attn_implementation="flash_attention_2"
         ).eval()
         self.qwen_model.requires_grad_(False)
-        
+
         self.qwen_processor = AutoProcessor.from_pretrained(model_path)
-        
+
         self.image_token_id = self.qwen_model.config.image_token_id
         self.qwen_hidden_size = self.qwen_model.config.text_config.hidden_size
 
@@ -172,7 +170,7 @@ class FluxValInfer:
             torch.nn.SiLU(),
             torch.nn.Linear(target_dim // 2, target_dim),
         ).to(self.device, dtype=self.weight_dtype)
-        
+
         projector_file = os.path.join(self.weight_path, "projector.pth")
         state_dict = torch.load(projector_file, map_location="cpu")
 
@@ -203,8 +201,7 @@ class FluxValInfer:
         if self.conditioning == "qwen":
             if lq is None:
                 raise ValueError("FLUX Qwen conditioning requires the original low-resolution LQ image.")
-            # Qwen must see the original LR image.  The caller separately sends the
-            # bicubic-upscaled image through the VAE/DiT path.
+            # Qwen sees the original LR image; the VAE/DiT path is upscaled separately.
             raw_lq = lq.float().to(self.device).clamp(0, 1)
             text_embeds, text_ids = self.extract_qwen_feature(raw_lq, prompts)
         elif self.conditioning == "txt":
@@ -316,7 +313,7 @@ class FluxValInfer:
             latents.device, latents.dtype
         )
         return latents * bn_std + bn_mean
-    
+
     def extract_qwen_feature(self, lq, prompts):
         batch_size = len(prompts)
         lq_images = (lq * 255).clamp(0, 255).to(torch.uint8).permute(0, 2, 3, 1).cpu().numpy()
@@ -349,7 +346,7 @@ class FluxValInfer:
 
         text_embeds = torch.nn.utils.rnn.pad_sequence(text_embeds_list, batch_first=True)
         return text_embeds, self._prepare_text_ids(text_embeds)
-    
+
     def _denoise_step(self, packed_latents, timesteps, height, width):
         text_embeds = self.c_txt["text_embeds"].to(device=self.device, dtype=self.weight_dtype)
         txt_ids = self.c_txt["text_ids"].to(device=self.device, dtype=self.weight_dtype)
@@ -368,7 +365,7 @@ class FluxValInfer:
             joint_attention_kwargs=None,
             return_dict=False,
         )[0]
-    
+
     def forward_generator(self, z_lq: torch.Tensor):
         timesteps = torch.full((z_lq.shape[0],), self.model_t, dtype=torch.long, device=self.device)
         sigmas = torch.tensor([self.coeff_t / 1000.0, 0], dtype=torch.float32, device=self.device)
@@ -386,7 +383,7 @@ class FluxValInfer:
         latents = self._denormalize_flux2_latents(latents)
         latents = self._unpatchify_latents(latents)
         return self.vae.decode(latents.to(dtype=self.weight_dtype), return_dict=False)[0]
-        
+
 
 def load_image_as_tensor(path: str) -> torch.Tensor:
     """Load an RGB image and return tensor of shape [1, 3, H, W] in [0,1]."""
@@ -424,8 +421,8 @@ def make_feather_mask(tile_h: int, tile_w: int, overlap: int, device: torch.devi
 
     wy = _hann(tile_h)
     wx = _hann(tile_w)
-    mask = torch.outer(wy, wx)  # [H, W]
-    mask = mask.unsqueeze(0).unsqueeze(0)  # [1,1,H,W]
+    mask = torch.outer(wy, wx)  # [height, width]
+    mask = mask.unsqueeze(0).unsqueeze(0)  # [1, 1, height, width]
     return mask
 
 
@@ -433,7 +430,7 @@ def tile_coords(H: int, W: int, tile: int, overlap: int) -> Tuple[Tuple[int, int
     stride = max(1, tile - overlap)
     ys = list(range(0, max(1, H - tile + 1), stride))
     xs = list(range(0, max(1, W - tile + 1), stride))
-    # ensure coverage of right/bottom edges
+    # The regular stride may not land exactly on the bottom or right edge.
     last_y = max(0, H - tile)
     last_x = max(0, W - tile)
     if ys[-1] != last_y:
@@ -457,7 +454,7 @@ def infer_tiled(
     if orig_H <= 0 or orig_W <= 0:
         raise ValueError("Invalid image size")
 
-    # Pad once so all patches respect DiT/VAE alignment (16 = VAE 8x * patch 2x)
+    # VAE 8x downsampling and DiT 2x patches require a multiple of 16.
     pad_h = (-orig_H) % 16
     pad_w = (-orig_W) % 16
     if pad_h or pad_w:
@@ -515,7 +512,7 @@ def infer_tiled(
     out = out.clamp(-1, 1)
     out = (out + 1.0) / 2.0
 
-    # Crop back to original size if we padded
+    # Remove alignment padding before returning the result.
     out = out[:, :, :orig_H, :orig_W]
     return out
 
@@ -686,7 +683,7 @@ def main():
         try:
             img_lq = load_image_as_tensor(lq_path)
             img_hr = bicubic_upscale(img_lq, scale_factor=args.bicubic_scale)
-            # VAE/DiT receives the 4x input, while Qwen receives the raw LR image.
+            # VAE/DiT receives the upscaled input; Qwen receives the raw LR image.
             out_t = infer_tiled(
                 img_hr,
                 model,

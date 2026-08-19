@@ -8,7 +8,7 @@ data_config:
       target: HYPIR.dataset.realesrgan.RealESRGANDataset
       params:
         file_meta:
-          file_list: 
+          file_list:
              - path: datasets/Aesthetic-Train-V2/metadata.jsonl
                image_path_prefix: datasets/Aesthetic-Train-V2
                limit: 50000
@@ -45,12 +45,12 @@ data_config:
       target: HYPIR.dataset.batch_transform.RealESRGANBatchTransform
       params:
         hq_key: hq
-        extra_keys: [txt] # [txt]
+        extra_keys: [txt]
         use_sharpener: true
         # Queue size of training pool, this should be multiples of batch_size (per GPU).
         queue_size: 256
-        # the first degradation process
-        resize_prob: [0.2, 0.7, 0.1] # up, down, keep
+        # First degradation stage.
+        resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
         resize_range: [0.15, 1.5]
         gaussian_noise_prob: 0.5
         noise_range: [1, 30]
@@ -58,10 +58,10 @@ data_config:
         gray_noise_prob: 0.4
         jpeg_range: [30, 95]
 
-        # the second degradation process
+        # Second degradation stage.
         stage2_scale: 4
         second_blur_prob: 0.8
-        resize_prob2: [0.3, 0.4, 0.3] # up, down, keep
+        resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
         resize_range2: [0.3, 1.2]
         gaussian_noise_prob2: 0.5
         noise_range2: [1, 25]
@@ -83,16 +83,15 @@ use_ema: false
 ema_decay: 0.999
 resume_ema: false
 
-lambda_gan: 0.1 #0.1
-lambda_lpips: 3 #5
+lambda_gan: 0.1
+lambda_lpips: 3
 lambda_l2: 0
 lambda_l1: 1
 lambda_fdl: 0
-lambda_r1: 10 # 1000 for latent gan
-# lambda_tv: 5
+lambda_r1: 10
 r1_sigma: 0.005
-lr_G: 5e-6 # 5e-6 #2e-5 5e-5 # 1e-5
-lr_D: 1e-6 # 1e-6 #4e-5 2e-5 # 1e-5
+lr_G: 5e-6
+lr_D: 1e-6
 optimizer_type: adamw
 opt_kwargs:
   betas: [0.9, 0.999]
@@ -120,24 +119,7 @@ use_repa: false
 log_grads: false
 train_encoder: false
 train_decoder: false
-use_pixel_shuffle: false
-use_clip: false
 use_txt: false
 use_qwen: true
 use_r1: true
-use_refiner: false
 use_fdl: false
-vae_decode_mode: cuda  # choices: auto | cuda | cpu | auto_highres_cpu
-vae_highres_min_hw: [768, 768]     # trigger CPU decode when both H and W >= this
-vae_highres_min_area: 1048576      # or when H*W >= this (default 1024*1024)
-
-resolution: 1024
-enc_type: dinov2-vit-b
-repa_projector_dim: 2048
-repa_encoder_depth: 8
-proj_coef: 1 #0.5
-
-repa:
-  prediction: v
-  path_type: linear
-  weighting: uniform

@@ -1,5 +1,4 @@
-from typing import overload, Literal
-import re
+from abc import ABC, abstractmethod
 import base64
 from io import BytesIO
 
@@ -9,13 +8,14 @@ from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 
-class Captioner:
+class Captioner(ABC):
 
     def __init__(self, device: torch.device) -> "Captioner":
         self.device = device
 
-    @overload
-    def __call__(self, image: Image.Image) -> str: ...
+    @abstractmethod
+    def __call__(self, image: Image.Image) -> str:
+        raise NotImplementedError
 
 
 class EmptyCaptioner(Captioner):

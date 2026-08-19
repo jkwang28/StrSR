@@ -8,7 +8,7 @@ data_config:
       target: HYPIR.dataset.realesrgan.RealESRGANDataset
       params:
         file_meta:
-          file_list: 
+          file_list:
             - path: datasets/Aesthetic-4K/train/metadata.jsonl
               image_path_prefix: datasets/Aesthetic-4K/train
           image_path_key: file_name
@@ -48,8 +48,8 @@ data_config:
         use_sharpener: true
         # Queue size of training pool, this should be multiples of batch_size (per GPU).
         queue_size: 256
-        # the first degradation process
-        resize_prob: [0.2, 0.7, 0.1] # up, down, keep
+        # First degradation stage.
+        resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
         resize_range: [0.15, 1.5]
         gaussian_noise_prob: 0.5
         noise_range: [1, 30]
@@ -57,10 +57,10 @@ data_config:
         gray_noise_prob: 0.4
         jpeg_range: [30, 95]
 
-        # the second degradation process
+        # Second degradation stage.
         stage2_scale: 4
         second_blur_prob: 0.8
-        resize_prob2: [0.3, 0.4, 0.3] # up, down, keep
+        resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
         resize_range2: [0.3, 1.2]
         gaussian_noise_prob2: 0.5
         noise_range2: [1, 25]
@@ -97,7 +97,7 @@ opt_kwargs:
 use_warmup: false
 lr_scheduler_type: constant
 lr_warmup_steps: 3000
-seed: 42 #649151
+seed: 42
 max_train_steps: 40000
 gradient_accumulation_steps: 1
 gradient_checkpointing: true
@@ -118,24 +118,7 @@ use_repa: false
 log_grads: false
 train_encoder: false
 train_decoder: false
-use_pixel_shuffle: false
-use_clip: false
 use_txt: false
 use_qwen: true
 use_r1: true
-use_refiner: false
 use_fdl: false
-vae_decode_mode: cuda
-vae_highres_min_hw: [768, 768]
-vae_highres_min_area: 1048576
-
-resolution: 1024
-enc_type: dinov2-vit-b
-repa_projector_dim: 2048
-repa_encoder_depth: 8
-proj_coef: 1
-
-repa:
-  prediction: v
-  path_type: linear
-  weighting: uniform

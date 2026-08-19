@@ -1,4 +1,5 @@
 from typing import Dict, Optional
+import logging
 import math
 import random
 import time
@@ -13,6 +14,8 @@ from PIL import Image
 from HYPIR.dataset.utils import augment, random_crop_arr, center_crop_arr, load_file_meta
 from HYPIR.utils.degradation import circular_lowpass_kernel, random_mixed_kernels
 from HYPIR.utils.common import instantiate_from_config
+
+logger = logging.getLogger(__name__)
 
 
 class RealESRGANDataset(data.Dataset):
@@ -85,7 +88,8 @@ class RealESRGANDataset(data.Dataset):
         self.p_empty_prompt = p_empty_prompt
         self.return_file_name = return_file_name
 
-        Image.MAX_IMAGE_PIXELS = 268435456 # remove 2 ** 28 size image warning
+        # Permit images up to 2**28 pixels without a decompression-bomb warning.
+        Image.MAX_IMAGE_PIXELS = 268435456
 
     def load_gt_image(self, image_path: str, max_retry: int = 5) -> Optional[np.ndarray]:
         image_bytes = None
@@ -94,20 +98,17 @@ class RealESRGANDataset(data.Dataset):
                 return None
             try:
                 image_bytes = self.file_backend.get(image_path)
-            except:
-                # file does not exist
-                return None
+            except OSError:
+                return None # file does not exist
             max_retry -= 1
             if image_bytes is None:
                 time.sleep(0.5)
 
         try:
-            # failed to decode image bytes
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        except:
-            return None
+        except (OSError, ValueError):
+            return None # failed to decode image bytes
 
-        # print(f"Loaded image size: {image.width}x{image.height} from {image_path}")
         if self.crop_type != "none":
             if image.height == self.out_size and image.width == self.out_size:
                 image = np.array(image)
@@ -118,12 +119,11 @@ class RealESRGANDataset(data.Dataset):
                     image = random_crop_arr(image, self.out_size, min_crop_frac=0.7)
         else:
             if not (image.height == self.out_size and image.width == self.out_size):
-                # warning
-                print(f"Warning: image size {image.width}x{image.height}, with no crop.")
+                logger.warning(
+                    "Using uncropped image with size %dx%d", image.width, image.height
+                )
             image = np.array(image)
-        # hwc, rgb, 0,255, uint8
-        # print(f"Final image size: {image.shape[1]}x{image.shape[0]}")
-        return image
+        return image  # HWC, RGB, uint8 in [0, 255]
 
     @torch.no_grad()
     def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
@@ -133,24 +133,21 @@ class RealESRGANDataset(data.Dataset):
         while img_gt is None:
             # load meta file
             image_file = self.image_files[index]
-            # print(f"{index=},{image_file=}")
             gt_path = image_file["image_path"]
             prompt = image_file["prompt"]
             if "lq_path" in image_file:
                 lq_path = image_file["lq_path"]
-                # print(f"Loading {lq_path}")
                 img_lq = self.load_gt_image(lq_path)
                 if img_lq is None:
-                    print(f"failed to load {lq_path}")
+                    logger.warning("Failed to load low-resolution image %s", lq_path)
             else:
                 img_lq = None
-                # print(f"{gt_path} no lq path")
             img_gt = self.load_gt_image(gt_path)
             if img_gt is None:
-                print(f"failed to load {gt_path}, try another image")
+                logger.warning("Failed to load %s; trying another image", gt_path)
                 index = random.randint(0, len(self) - 1)
 
-        # hwc, rgb to bgr, [0, 255] to [0, 1], float32
+        # HWC RGB uint8 to HWC BGR float32 in [0, 1].
         img_hq = (img_gt[..., ::-1] / 255.0).astype(np.float32)
         if img_lq is not None:
             img_lq = (img_lq[..., ::-1] / 255.0).astype(np.float32)
@@ -181,7 +178,7 @@ class RealESRGANDataset(data.Dataset):
                 self.betap_range,
                 noise_range=None,
             )
-        # pad kernel
+        # Use a fixed 21x21 shape so kernels can be stacked into a batch.
         pad_size = (21 - kernel_size) // 2
         kernel = np.pad(kernel, ((pad_size, pad_size), (pad_size, pad_size)))
 
@@ -206,7 +203,7 @@ class RealESRGANDataset(data.Dataset):
                 noise_range=None,
             )
 
-        # pad kernel
+        # Use the same fixed shape as the first-stage kernel.
         pad_size = (21 - kernel_size) // 2
         kernel2 = np.pad(kernel2, ((pad_size, pad_size), (pad_size, pad_size)))
 
@@ -244,7 +241,6 @@ class RealESRGANDataset(data.Dataset):
                 prefix = None
             if prefix:
                 try:
-                    # Normalize and compute relative path when possible
                     rel = os.path.relpath(gt_path, start=prefix)
                     data["filename"] = rel
                 except Exception:

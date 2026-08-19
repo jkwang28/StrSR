@@ -573,7 +573,7 @@ def generate_poisson_noise(img, scale=1.0, gray_noise=False):
     """
     if gray_noise:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # round and clip image for counting vals correctly
+    # Quantize before counting intensity levels used for Poisson scaling.
     img = np.clip((img * 255.0).round(), 0, 255) / 255.
     vals = len(np.unique(img))
     vals = 2**np.ceil(np.log2(vals))
@@ -629,7 +629,7 @@ def generate_poisson_noise_pt(img, scale=1.0, gray_noise=0):
         cal_gray_noise = torch.sum(gray_noise) > 0
     if cal_gray_noise:
         img_gray = rgb_to_grayscale(img, num_output_channels=1)
-        # round and clip image for counting vals correctly
+        # Quantize before counting intensity levels used for Poisson scaling.
         img_gray = torch.clamp((img_gray * 255.0).round(), 0, 255) / 255.
         # use for-loop to get the unique values for each sample
         vals_list = [len(torch.unique(img_gray[i, :, :, :])) for i in range(b)]
@@ -639,8 +639,7 @@ def generate_poisson_noise_pt(img, scale=1.0, gray_noise=0):
         noise_gray = out - img_gray
         noise_gray = noise_gray.expand(b, 3, h, w)
 
-    # always calculate color noise
-    # round and clip image for counting vals correctly
+    # The color path needs its own per-sample intensity count.
     img = torch.clamp((img * 255.0).round(), 0, 255) / 255.
     # use for-loop to get the unique values for each sample
     vals_list = [len(torch.unique(img[i, :, :, :])) for i in range(b)]

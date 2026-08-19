@@ -48,7 +48,6 @@ def write_manifest(
         manifest_file.write("\n")
 
 
-# Simple inference helper reusing trainer logic (zimage_val) instead of enhancer.
 class ZImageValInfer:
     def __init__(
         self,
@@ -94,7 +93,7 @@ class ZImageValInfer:
             subfolder="vae",
             torch_dtype=self.weight_dtype,
         ).to(self.device)
-        self.vae.eval().requires_grad_(False)   
+        self.vae.eval().requires_grad_(False)
 
     def _init_generator(self):
         self.G = ZImageTransformer2DModel.from_pretrained(
@@ -114,22 +113,21 @@ class ZImageValInfer:
             )
             self.G = get_peft_model(self.G, lora_cfg)
             self.G.to(self.device)
-        # keep eval mode for inference
         self.G.eval()
 
     def _init_qwen(self):
         model_path = self.qwen_model_path
-        
+
         self.qwen_model = Qwen3VLForConditionalGeneration.from_pretrained(
-            model_path, 
+            model_path,
             torch_dtype=self.weight_dtype,
             device_map=self.device,
             attn_implementation="flash_attention_2"
         ).eval()
         self.qwen_model.requires_grad_(False)
-        
+
         self.qwen_processor = AutoProcessor.from_pretrained(model_path)
-        
+
         self.image_token_id = self.qwen_model.config.image_token_id
         self.qwen_hidden_size = self.qwen_model.config.text_config.hidden_size
 
@@ -147,7 +145,7 @@ class ZImageValInfer:
             torch.nn.SiLU(),
             torch.nn.Linear(target_dim // 2, target_dim),
         ).to(self.device, dtype=self.weight_dtype)
-        
+
         projector_file = os.path.join(self.weight_path, "projector.pth")
         state_dict = torch.load(projector_file, map_location="cpu")
 
@@ -256,9 +254,9 @@ class ZImageValInfer:
     def extract_qwen_feature(self, lq, prompts):
         batch_size = len(prompts)
         lq_images_denorm = (lq * 255).clamp(0, 255).to(torch.uint8).permute(0, 2, 3, 1).cpu().numpy()
-        
+
         from PIL import Image
-        
+
         messages_batch = []
         for i in range(batch_size):
             img_pil = Image.fromarray(lq_images_denorm[i])
@@ -267,7 +265,7 @@ class ZImageValInfer:
                     "role": "user",
                     "content": [
                         {"type": "image", "image": img_pil},
-                        {"type": "text", "text": prompts[i]}, 
+                        {"type": "text", "text": prompts[i]},
                     ],
                 }
             ]
@@ -278,7 +276,7 @@ class ZImageValInfer:
             for msg in messages_batch
         ]
         image_inputs, video_inputs = process_vision_info(messages_batch)
-        
+
         inputs = self.qwen_processor(
             text=texts,
             images=image_inputs,
@@ -290,8 +288,8 @@ class ZImageValInfer:
 
         with torch.no_grad():
             outputs = self.qwen_model.model(**inputs, output_hidden_states=True)
-            last_hidden_state = outputs.last_hidden_state # [B, Seq_Len, Hidden]
-        
+            last_hidden_state = outputs.last_hidden_state  # [batch, sequence, hidden]
+
         text_embeds_list = []
 
         for i in range(batch_size):
@@ -300,13 +298,13 @@ class ZImageValInfer:
 
             text_mask = (attn_mask == 1) & (input_ids != self.image_token_id)
 
-            text_tokens = last_hidden_state[i][text_mask]              # [N_txt, H_qwen]
+            text_tokens = last_hidden_state[i][text_mask]  # [text tokens, hidden]
             text_tokens = text_tokens.to(dtype=self.weight_dtype)
             proj_text_tokens = self.projector(text_tokens)
             text_embeds_list.append(proj_text_tokens)
 
         return text_embeds_list
-    
+
     def forward_generator(self, z_lq: torch.Tensor):
         t_expand = torch.full((z_lq.shape[0],), self.model_t, dtype=torch.long, device=self.device)
         t_expand = (1000 - t_expand) / 1000
@@ -328,7 +326,7 @@ class ZImageValInfer:
         with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=(self.weight_dtype == torch.bfloat16 and self.device.type == "cuda")):
             image = self.vae.decode(latents, return_dict=False)[0]
         return image
-        
+
 
 def load_image_as_tensor(path: str) -> torch.Tensor:
     """Load an RGB image and return tensor of shape [1, 3, H, W] in [0,1]."""
@@ -375,7 +373,7 @@ def tile_coords(H: int, W: int, tile: int, overlap: int) -> Tuple[Tuple[int, int
     stride = max(1, tile - overlap)
     ys = list(range(0, max(1, H - tile + 1), stride))
     xs = list(range(0, max(1, W - tile + 1), stride))
-    # ensure coverage of right/bottom edges
+    # The regular stride may not land exactly on the bottom or right edge.
     last_y = max(0, H - tile)
     last_x = max(0, W - tile)
     if ys[-1] != last_y:
@@ -611,6 +609,7 @@ def main():
         try:
             img_lq = load_image_as_tensor(lq_path)
             img_hr = bicubic_upscale(img_lq, scale_factor=args.bicubic_scale)
+            # VAE/DiT receives the upscaled input; Qwen receives the raw LR image.
             out_t = infer_tiled(
                 img_hr,
                 model,

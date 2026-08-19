@@ -1,7 +1,10 @@
+import logging
 import os
 from collections import OrderedDict
 
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 class EMAModel:
@@ -17,10 +20,10 @@ class EMAModel:
                     self.ema_state_dict[name] = param.clone().detach()
             self.original_weights = None
             if verbose:
-                print(f"Keep EMA Parameters: {len(self.ema_state_dict)}")
+                logger.info("Tracking %d EMA parameters", len(self.ema_state_dict))
             if ema_resume_pth:
                 if verbose:
-                    print(f"Loading EMA Parameters from {ema_resume_pth}")
+                    logger.info("Loading EMA parameters from %s", ema_resume_pth)
                 ema_ckpt = torch.load(ema_resume_pth, map_location="cpu")
                 for name, param in self.ema_state_dict.items():
                     if name in ema_ckpt:

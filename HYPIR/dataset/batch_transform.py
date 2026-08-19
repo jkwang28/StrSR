@@ -1,4 +1,5 @@
-from typing import Any, overload, Dict, List, Sequence
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Sequence
 import random
 import copy
 
@@ -11,10 +12,11 @@ from HYPIR.dataset.diffjpeg import DiffJPEG
 from HYPIR.utils.degradation import random_add_gaussian_noise_pt, random_add_poisson_noise_pt
 
 
-class BatchTransform:
+class BatchTransform(ABC):
 
-    @overload
-    def __call__(self, batch: Any) -> Any: ...
+    @abstractmethod
+    def __call__(self, batch: Any) -> Any:
+        raise NotImplementedError
 
 
 class IdentityBatchTransform(BatchTransform):
@@ -216,7 +218,6 @@ class RealESRGANBatchTransform(BatchTransform):
         else:
             stage2_scale = self.stage2_scale
         stage2_h, stage2_w = int(ori_h / stage2_scale), int(ori_w / stage2_scale)
-        # print(f"stage2 scale = {stage2_scale}")
 
         # random resize
         updown_type = random.choices(["up", "down", "keep"], self.resize_prob2)[0]
@@ -283,6 +284,7 @@ class RealESRGANBatchTransform(BatchTransform):
         if self.queue_size > 0:
             batch = self._dequeue_and_enqueue(batch)
         return batch
+
 
 class RealESRGANBatchTransformHQLQ(BatchTransform):
 
@@ -394,23 +396,18 @@ class RealESRGANBatchTransformHQLQ(BatchTransform):
 
     @torch.no_grad()
     def __call__(self, batch: Dict[str, torch.Tensor | List[str]]) -> Dict[str, torch.Tensor | List[str]]:
-        # print(f"{batch}=")
         hq = batch[self.hq_key]
         if self.use_sharpener:
             self.usm_sharpener.to(hq)
             hq = self.usm_sharpener(hq)
 
-        # print("self.lq_key = ", self.lq_key)
-        # print(f"{batch[self.lq_key]=}")
         if self.lq_key in batch:
             lq = batch[self.lq_key]
         else:
             lq = None
 
         batch = {"GT": hq, "LQ": lq, **{k: batch[k] for k in self.extra_keys}}
-        print(f"{self.extra_keys=}")
 
         if self.queue_size > 0:
             batch = self._dequeue_and_enqueue(batch)
         return batch
-

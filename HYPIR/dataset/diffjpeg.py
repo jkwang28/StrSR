@@ -45,7 +45,6 @@ def quality_to_factor(quality):
         quality = 200. - quality * 2
     return quality / 100.
 
-
 # ------------------------ compression ------------------------#
 class RGB2YCbCrJpeg(nn.Module):
     """ Converts RGB image to YCbCr
@@ -436,7 +435,6 @@ class DeCompressJpeg(nn.Module):
                 height, width = imgh, imgw
             comp = self.idct(comp)
             components[k] = self.merging(comp, height, width)
-            #
         image = self.chroma(components['y'], components['cb'], components['cr'])
         image = self.colors(image)
 
@@ -479,7 +477,7 @@ class DiffJPEG(nn.Module):
                 factor[i] = quality_to_factor(factor[i])
         h, w = x.size()[-2:]
         h_pad, w_pad = 0, 0
-        # why should use 16
+        # 4:2:0 chroma subsampling requires 16x16 minimum coded units.
         if h % 16 != 0:
             h_pad = 16 - h % 16
         if w % 16 != 0:

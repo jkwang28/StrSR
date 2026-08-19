@@ -14,6 +14,8 @@ from tqdm import tqdm
 
 from torch.hub import download_url_to_file, get_dir
 
+logger = logging.getLogger(__name__)
+
 
 def get_obj_from_str(string: str, reload: bool=False) -> Any:
     module, cls = string.rsplit(".", 1)
@@ -76,7 +78,7 @@ def wavelet_reconstruction(content_feat:Tensor, style_feat:Tensor):
     # calculate the wavelet decomposition of the style feature
     style_high_freq, style_low_freq = wavelet_decomposition(style_feat)
     del style_high_freq
-    # reconstruct the content feature with the style's high frequency
+    # reconstruct the content feature with the style's low frequency
     return content_high_freq + style_low_freq
 
 
@@ -108,7 +110,7 @@ def load_file_from_url(url, model_dir=None, progress=True, file_name=None):
         filename = file_name
     cached_file = os.path.abspath(os.path.join(model_dir, filename))
     if not os.path.exists(cached_file):
-        print(f'Downloading: "{url}" to {cached_file}\n')
+        logger.info('Downloading "%s" to %s', url, cached_file)
         download_url_to_file(url, cached_file, hash_prefix=None, progress=progress)
     return cached_file
 
@@ -117,11 +119,11 @@ def sliding_windows(h: int, w: int, tile_size: int, tile_stride: int) -> Tuple[i
     hi_list = list(range(0, h - tile_size + 1, tile_stride))
     if (h - tile_size) % tile_stride != 0:
         hi_list.append(h - tile_size)
-    
+
     wi_list = list(range(0, w - tile_size + 1, tile_stride))
     if (w - tile_size) % tile_stride != 0:
         wi_list.append(w - tile_size)
-    
+
     coords = []
     for hi in hi_list:
         for wi in wi_list:
@@ -168,7 +170,7 @@ def make_tiled_fn(
     progress: bool = True,
     desc: str=None,
 ) -> Callable[[torch.Tensor], torch.Tensor]:
-    # Only split the first input of function.
+    # Tile only x; pass other arguments through with the current tile index.
     def tiled_fn(x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         if scale_type == "up":
             scale_fn = lambda n: int(n * scale)
@@ -227,7 +229,6 @@ def log_txt_as_img(wh, xc):
     for bi in range(b):
         txt = Image.new("RGB", wh, color="white")
         draw = ImageDraw.Draw(txt)
-        # font = ImageFont.truetype('font/DejaVuSans.ttf', size=size)
         font = ImageFont.load_default()
         nc = int(40 * (wh[0] / 256))
         lines = "\n".join(
@@ -237,7 +238,7 @@ def log_txt_as_img(wh, xc):
         try:
             draw.text((0, 0), lines, fill="black", font=font)
         except UnicodeEncodeError:
-            print("Cant encode string for logging. Skipping.")
+            logger.warning("Unable to encode text for image logging; skipping it")
 
         txt = np.array(txt).transpose(2, 0, 1) / 127.5 - 1.0
         txts.append(txt)
