@@ -151,6 +151,15 @@ bash test_zimage.sh --conditioning txt --prompt "a highly detailed realistic ima
 bash test_flux.sh --conditioning txt --prompt "a highly detailed realistic image"
 ```
 
+For benchmarks with small inputs, you can optionally force bicubic-upscaled inputs
+smaller than 1024 to be resized to 1024x1024 for inference, then resized back to
+their original target resolution before saving:
+
+```bash
+bash test_zimage.sh --min-infer-size 1024
+bash test_flux.sh --min-infer-size 1024
+```
+
 ## <a name="results"></a>🔎 Results
 
 We achieved state-of-the-art performance on synthetic and real-world datasets.

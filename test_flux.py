@@ -409,6 +409,12 @@ def bicubic_upscale(t: torch.Tensor, scale_factor: int = 4) -> torch.Tensor:
     return out.clamp(0, 1)
 
 
+def resize_to_shape(t: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
+    """Resize tensor [1,3,H,W] to (H, W) with bicubic interpolation."""
+    out = F.interpolate(t, size=size, mode="bicubic", align_corners=False)
+    return out.clamp(0, 1)
+
+
 def make_feather_mask(tile_h: int, tile_w: int, overlap: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
     """Create a 2D feathering mask to blend overlapping tiles smoothly."""
     if overlap <= 0:
@@ -581,6 +587,12 @@ def main():
         help="Text prompt; required when --conditioning txt",
     )
     parser.add_argument("--bicubic-scale", type=int, default=4)
+    parser.add_argument(
+        "--min-infer-size",
+        type=int,
+        default=0,
+        help="If >0, bicubic-upscaled inputs smaller than this size are resized to [min-infer-size, min-infer-size] before inference and resized back after inference.",
+    )
 
     args = parser.parse_args()
 
@@ -683,6 +695,13 @@ def main():
         try:
             img_lq = load_image_as_tensor(lq_path)
             img_hr = bicubic_upscale(img_lq, scale_factor=args.bicubic_scale)
+            target_h, target_w = img_hr.shape[-2], img_hr.shape[-1]
+            if args.min_infer_size > 0 and (target_h < args.min_infer_size or target_w < args.min_infer_size):
+                img_hr = resize_to_shape(img_hr, (args.min_infer_size, args.min_infer_size))
+                loguru.logger.info(
+                    f"Upscaled small input for inference: {rel_path} from {target_w}x{target_h} to "
+                    f"{args.min_infer_size}x{args.min_infer_size}"
+                )
             # VAE/DiT receives the upscaled input; Qwen receives the raw LR image.
             out_t = infer_tiled(
                 img_hr,
@@ -693,6 +712,8 @@ def main():
                 tile=args.tile,
                 overlap=args.overlap,
             )
+            if out_t.shape[-2] != target_h or out_t.shape[-1] != target_w:
+                out_t = resize_to_shape(out_t, (target_h, target_w))
             save_tensor_image(out_t, out_path)
             total_generated += 1
             loguru.logger.info(f"Saved: {out_path}")
