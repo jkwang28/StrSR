@@ -151,6 +151,23 @@ bash test_zimage.sh --conditioning txt --prompt "a highly detailed realistic ima
 bash test_flux.sh --conditioning txt --prompt "a highly detailed realistic image"
 ```
 
+For small inputs, `--infer-resize` can enlarge the bicubic-upscaled image while
+preserving its aspect ratio. The reference size defaults to 1024:
+
+```bash
+# Match approximately the pixel area of a 1024x1024 input.
+bash test_zimage.sh --infer-resize area
+
+# Scale the shorter edge to 1024. This can create more tiles and make tile seams
+# more noticeable on non-square images.
+bash test_zimage.sh --infer-resize short-edge
+```
+
+The same options work with `test_flux.sh`. For example, a 128x256 LR input with
+4x super-resolution has a 512x1024 target size. `area` uses approximately
+724x1448 for inference, while `short-edge` uses 1024x2048. Both modes resize the
+result back to 512x1024 before saving. Use `--infer-size` to override 1024.
+
 ## <a name="results"></a>🔎 Results
 
 We achieved state-of-the-art performance on synthetic and real-world datasets.

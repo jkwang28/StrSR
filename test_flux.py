@@ -17,6 +17,11 @@ from qwen_vl_utils import process_vision_info
 
 from diffusers.models import AutoencoderKLFlux2, Flux2Transformer2DModel
 from HYPIR.utils.inference import load_trainable_weights
+from HYPIR.utils.inference_resize import (
+    INFERENCE_RESIZE_MODES,
+    inference_resize_shape,
+    resize_to_shape,
+)
 from HYPIR.utils.captioner import IMAGE_DESCRIPTION_PROMPT
 
 
@@ -581,6 +586,21 @@ def main():
         help="Text prompt; required when --conditioning txt",
     )
     parser.add_argument("--bicubic-scale", type=int, default=4)
+    parser.add_argument(
+        "--infer-resize",
+        choices=INFERENCE_RESIZE_MODES,
+        default="none",
+        help=(
+            "Optional aspect-ratio-preserving resize: 'area' matches the reference "
+            "pixel area; 'short-edge' matches the reference shorter edge."
+        ),
+    )
+    parser.add_argument(
+        "--infer-size",
+        type=int,
+        default=1024,
+        help="Reference size used by --infer-resize (default: 1024).",
+    )
 
     args = parser.parse_args()
 
@@ -588,6 +608,8 @@ def main():
         parser.error("--prompt is required and must be non-empty when --conditioning txt")
     if args.conditioning == "qwen" and args.prompt is not None:
         parser.error("--prompt can only be used when --conditioning txt")
+    if args.infer_size <= 0:
+        parser.error("--infer-size must be positive")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     weight_dtype = torch.bfloat16 if args.precision == "bf16" and device.type == "cuda" else torch.float32
@@ -683,6 +705,19 @@ def main():
         try:
             img_lq = load_image_as_tensor(lq_path)
             img_hr = bicubic_upscale(img_lq, scale_factor=args.bicubic_scale)
+            target_h, target_w = img_hr.shape[-2], img_hr.shape[-1]
+            infer_h, infer_w = inference_resize_shape(
+                target_h,
+                target_w,
+                args.infer_resize,
+                args.infer_size,
+            )
+            if (infer_h, infer_w) != (target_h, target_w):
+                img_hr = resize_to_shape(img_hr, (infer_h, infer_w))
+                loguru.logger.info(
+                    f"Resized input for {args.infer_resize} inference: {rel_path} "
+                    f"from {target_w}x{target_h} to {infer_w}x{infer_h}"
+                )
             # VAE/DiT receives the upscaled input; Qwen receives the raw LR image.
             out_t = infer_tiled(
                 img_hr,
@@ -693,6 +728,8 @@ def main():
                 tile=args.tile,
                 overlap=args.overlap,
             )
+            if out_t.shape[-2] != target_h or out_t.shape[-1] != target_w:
+                out_t = resize_to_shape(out_t, (target_h, target_w))
             save_tensor_image(out_t, out_path)
             total_generated += 1
             loguru.logger.info(f"Saved: {out_path}")
