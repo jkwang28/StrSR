@@ -17,6 +17,11 @@ from peft import LoraConfig, get_peft_model
 from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer, Qwen3VLForConditionalGeneration
 from qwen_vl_utils import process_vision_info
 from HYPIR.utils.inference import load_trainable_weights
+from HYPIR.utils.inference_resize import (
+    INFERENCE_RESIZE_MODES,
+    inference_resize_shape,
+    resize_to_shape,
+)
 from HYPIR.utils.captioner import IMAGE_DESCRIPTION_PROMPT
 
 
@@ -352,12 +357,6 @@ def bicubic_upscale(t: torch.Tensor, scale_factor: int = 4) -> torch.Tensor:
     return out.clamp(0, 1)
 
 
-def resize_to_shape(t: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
-    """Resize tensor [1,3,H,W] to (H, W) with bicubic interpolation."""
-    out = F.interpolate(t, size=size, mode="bicubic", align_corners=False)
-    return out.clamp(0, 1)
-
-
 def make_feather_mask(tile_h: int, tile_w: int, overlap: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
     """Create a 2D feathering mask to blend overlapping tiles smoothly."""
     if overlap <= 0:
@@ -514,10 +513,19 @@ def main():
     )
     parser.add_argument("--bicubic-scale", type=int, default=4)
     parser.add_argument(
-        "--min-infer-size",
+        "--infer-resize",
+        choices=INFERENCE_RESIZE_MODES,
+        default="none",
+        help=(
+            "Optional aspect-ratio-preserving resize: 'area' matches the reference "
+            "pixel area; 'short-edge' matches the reference shorter edge."
+        ),
+    )
+    parser.add_argument(
+        "--infer-size",
         type=int,
-        default=0,
-        help="If >0, bicubic-upscaled inputs smaller than this size are resized to [min-infer-size, min-infer-size] before inference and resized back after inference.",
+        default=1024,
+        help="Reference size used by --infer-resize (default: 1024).",
     )
 
     args = parser.parse_args()
@@ -526,6 +534,8 @@ def main():
         parser.error("--prompt is required and must be non-empty when --conditioning txt")
     if args.conditioning == "qwen" and args.prompt is not None:
         parser.error("--prompt can only be used when --conditioning txt")
+    if args.infer_size <= 0:
+        parser.error("--infer-size must be positive")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     weight_dtype = torch.bfloat16 if args.precision == "bf16" and device.type == "cuda" else torch.float32
@@ -622,11 +632,17 @@ def main():
             img_lq = load_image_as_tensor(lq_path)
             img_hr = bicubic_upscale(img_lq, scale_factor=args.bicubic_scale)
             target_h, target_w = img_hr.shape[-2], img_hr.shape[-1]
-            if args.min_infer_size > 0 and (target_h < args.min_infer_size or target_w < args.min_infer_size):
-                img_hr = resize_to_shape(img_hr, (args.min_infer_size, args.min_infer_size))
+            infer_h, infer_w = inference_resize_shape(
+                target_h,
+                target_w,
+                args.infer_resize,
+                args.infer_size,
+            )
+            if (infer_h, infer_w) != (target_h, target_w):
+                img_hr = resize_to_shape(img_hr, (infer_h, infer_w))
                 loguru.logger.info(
-                    f"Upscaled small input for inference: {rel_path} from {target_w}x{target_h} to "
-                    f"{args.min_infer_size}x{args.min_infer_size}"
+                    f"Resized input for {args.infer_resize} inference: {rel_path} "
+                    f"from {target_w}x{target_h} to {infer_w}x{infer_h}"
                 )
             # VAE/DiT receives the upscaled input; Qwen receives the raw LR image.
             out_t = infer_tiled(
